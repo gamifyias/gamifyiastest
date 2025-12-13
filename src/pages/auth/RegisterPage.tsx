@@ -19,16 +19,16 @@ export default function RegisterPage() {
     password: '',
     confirmPassword: '',
   });
-  const [selectedRole, setSelectedRole] = useState<UserRole>(initialRole);
+  const [selectedRole, setSelectedRole] = useState<'student' | 'mentor'>(initialRole as 'student' | 'mentor');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
   const { register } = useAuth();
   const navigate = useNavigate();
 
-  const roles = [
-    { value: 'student' as UserRole, label: 'Student', icon: Gamepad2, color: 'from-game-pipe to-game-pipe-dark' },
-    { value: 'mentor' as UserRole, label: 'Mentor', icon: BookOpen, color: 'from-secondary to-secondary/80' },
+  const roles: { value: 'student' | 'mentor'; label: string; icon: typeof Gamepad2; color: string }[] = [
+    { value: 'student', label: 'Student', icon: Gamepad2, color: 'from-game-pipe to-game-pipe-dark' },
+    { value: 'mentor', label: 'Mentor', icon: BookOpen, color: 'from-secondary to-secondary/80' },
   ];
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -46,9 +46,12 @@ export default function RegisterPage() {
 
     setIsLoading(true);
     try {
-      await register(formData.email, formData.password, formData.fullName, selectedRole);
-      toast.success('Account created successfully!');
-      navigate(`/${selectedRole}/dashboard`);
+      const { error } = await register(formData.email, formData.password, formData.fullName);
+      if (error) {
+        toast.error(error.message || 'Registration failed. Please try again.');
+      } else {
+        toast.success('Account created! Please check your email to verify your account, or wait for admin approval.');
+      }
     } catch (error) {
       toast.error('Registration failed. Please try again.');
     } finally {

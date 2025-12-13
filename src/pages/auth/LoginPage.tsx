@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,30 +17,23 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   
   const { login } = useAuth();
-  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     
     try {
-      await login(formData.email, formData.password);
-      toast.success('Welcome back!');
+      const { error } = await login(formData.email, formData.password);
+      if (error) {
+        toast.error(error.message || 'Invalid credentials');
+      } else {
+        toast.success('Welcome back!');
+      }
     } catch (error) {
-      toast.error('Invalid credentials. Try demo accounts below.');
+      toast.error('Login failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const demoAccounts = [
-    { email: 'admin@test.com', role: 'Admin', color: 'bg-game-boss' },
-    { email: 'mentor@test.com', role: 'Mentor', color: 'bg-secondary' },
-    { email: 'student@test.com', role: 'Student', color: 'bg-game-pipe' },
-  ];
-
-  const fillDemoAccount = (email: string) => {
-    setFormData({ email, password: 'demo123' });
   };
 
   return (
@@ -128,25 +121,6 @@ export default function LoginPage() {
                 {isLoading ? 'Signing In...' : 'Sign In'}
               </Button>
             </form>
-
-            {/* Demo Accounts */}
-            <div className="mt-6 pt-6 border-t border-border">
-              <p className="text-xs text-muted-foreground text-center mb-3">
-                Demo Accounts (click to fill)
-              </p>
-              <div className="flex flex-wrap gap-2 justify-center">
-                {demoAccounts.map((account) => (
-                  <button
-                    key={account.email}
-                    type="button"
-                    onClick={() => fillDemoAccount(account.email)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium text-white transition-transform hover:scale-105 ${account.color}`}
-                  >
-                    {account.role}
-                  </button>
-                ))}
-              </div>
-            </div>
 
             <div className="mt-6 text-center text-sm">
               <span className="text-muted-foreground">Don't have an account? </span>
