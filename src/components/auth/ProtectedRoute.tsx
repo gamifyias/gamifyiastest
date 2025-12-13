@@ -29,10 +29,18 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to="/auth/login" state={{ from: location }} replace />;
   }
 
-  if (allowedRoles && user && !allowedRoles.includes(user.role)) {
-    // Redirect to appropriate dashboard based on role
-    const dashboardPath = `/${user.role}/dashboard`;
-    return <Navigate to={dashboardPath} replace />;
+  // Check if user has pending role (no access assigned yet)
+  if (user?.role === 'pending') {
+    return <Navigate to="/pending-approval" replace />;
+  }
+
+  if (allowedRoles && user) {
+    const userRole = user.role as UserRole;
+    if (!allowedRoles.includes(userRole)) {
+      // Redirect to appropriate dashboard based on role
+      const dashboardPath = userRole === 'pending' ? '/pending-approval' : `/${userRole}/dashboard`;
+      return <Navigate to={dashboardPath} replace />;
+    }
   }
 
   return <>{children}</>;
@@ -59,6 +67,9 @@ export function PublicRoute({ children }: PublicRouteProps) {
   }
 
   if (isAuthenticated && user) {
+    if (user.role === 'pending') {
+      return <Navigate to="/pending-approval" replace />;
+    }
     const dashboardPath = `/${user.role}/dashboard`;
     return <Navigate to={dashboardPath} replace />;
   }

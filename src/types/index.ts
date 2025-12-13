@@ -1,11 +1,29 @@
 // User & Auth Types
-export type UserRole = 'admin' | 'mentor' | 'student';
+export type UserRole = 'admin' | 'mentor' | 'student' | 'pending';
 
 export interface User {
   id: string;
   email: string;
   full_name: string;
   avatar_url?: string;
+  role: UserRole;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Profile {
+  id: string;
+  user_id: string;
+  full_name: string;
+  email: string;
+  avatar_url?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserRoleRecord {
+  id: string;
+  user_id: string;
   role: UserRole;
   created_at: string;
   updated_at: string;
@@ -24,12 +42,14 @@ export interface Subject {
   description?: string;
   image_url?: string;
   color: string;
-  icon: string;
-  order: number;
+  created_by?: string;
   is_active: boolean;
-  created_by: string;
+  sort_order: number;
   created_at: string;
   updated_at: string;
+  topics?: Topic[];
+  topic_count?: number;
+  question_count?: number;
 }
 
 export interface Topic {
@@ -38,12 +58,15 @@ export interface Topic {
   name: string;
   description?: string;
   image_url?: string;
-  order: number;
-  difficulty_level: 'easy' | 'medium' | 'hard';
+  difficulty_level: DifficultyLevel;
   xp_reward: number;
   is_active: boolean;
+  sort_order: number;
+  created_by?: string;
   created_at: string;
   updated_at: string;
+  subject?: Subject;
+  question_count?: number;
 }
 
 // Question Types
@@ -52,9 +75,12 @@ export type DifficultyLevel = 'easy' | 'medium' | 'hard';
 
 export interface QuestionOption {
   id: string;
-  text: string;
-  image_url?: string;
+  question_id: string;
+  option_text: string;
+  option_image_url?: string;
   is_correct: boolean;
+  sort_order: number;
+  created_at: string;
 }
 
 export interface Question {
@@ -64,156 +90,240 @@ export interface Question {
   question_type: QuestionType;
   question_text: string;
   question_image_url?: string;
-  options: QuestionOption[];
-  correct_answer?: string; // For numeric type
-  explanation: string;
   difficulty: DifficultyLevel;
   marks: number;
   negative_marks: number;
+  explanation?: string;
+  correct_answer?: string;
+  correct_options?: string[];
   randomize_options: boolean;
-  tags: string[];
-  created_by: string;
+  is_active: boolean;
+  created_by?: string;
   created_at: string;
   updated_at: string;
+  options?: QuestionOption[];
+  subject?: Subject;
+  topic?: Topic;
 }
 
 // Test Types
-export type TestStatus = 'draft' | 'scheduled' | 'active' | 'completed' | 'archived';
-export type TestMode = 'fixed' | 'random' | 'adaptive';
-
-export interface TestSettings {
-  allow_navigation: boolean;
-  allow_revisit: boolean;
-  show_question_numbers: boolean;
-  randomize_questions: boolean;
-  randomize_options: boolean;
-  enable_anti_cheat: boolean;
-  show_watermark: boolean;
-  auto_submit: boolean;
-  show_results_immediately: boolean;
-  show_correct_answers: boolean;
-  show_explanations: boolean;
-}
+export type TestType = 'subject' | 'topic' | 'mixed' | 'weak_areas';
+export type TestStatus = 'in_progress' | 'submitted' | 'auto_submitted' | 'terminated';
 
 export interface Test {
   id: string;
-  name: string;
+  title: string;
   description?: string;
   subject_id?: string;
-  topic_ids: string[];
-  test_mode: TestMode;
-  status: TestStatus;
+  test_type: TestType;
   duration_minutes: number;
   total_marks: number;
-  passing_marks: number;
-  question_count: number;
-  difficulty_distribution: {
-    easy: number;
-    medium: number;
-    hard: number;
-  };
+  pass_marks: number;
+  total_questions: number;
+  
+  // Scheduling
   start_time?: string;
   end_time?: string;
+  is_anytime: boolean;
+  
+  // Settings
   max_attempts: number;
-  settings: TestSettings;
-  instructions?: string;
-  created_by: string;
+  shuffle_questions: boolean;
+  shuffle_options: boolean;
+  show_results: boolean;
+  show_answers: boolean;
+  allow_navigation: boolean;
+  allow_review: boolean;
+  question_by_question: boolean;
+  auto_submit: boolean;
+  
+  // Anti-cheat
+  anti_cheat_enabled: boolean;
+  fullscreen_required: boolean;
+  tab_switch_limit: number;
+  watermark_enabled: boolean;
+  
+  // Difficulty distribution
+  easy_percentage: number;
+  medium_percentage: number;
+  hard_percentage: number;
+  
+  is_public: boolean;
+  is_active: boolean;
+  created_by?: string;
   created_at: string;
   updated_at: string;
+  
+  // Relations
+  subject?: Subject;
+  questions?: Question[];
+  assignment?: TestAssignment;
 }
 
 export interface TestQuestion {
   id: string;
   test_id: string;
   question_id: string;
-  order: number;
+  sort_order: number;
   marks_override?: number;
   negative_marks_override?: number;
+  created_at: string;
+  question?: Question;
+}
+
+export interface TestTopic {
+  id: string;
+  test_id: string;
+  topic_id: string;
+  question_count: number;
+  created_at: string;
+  topic?: Topic;
 }
 
 export interface TestAssignment {
   id: string;
   test_id: string;
-  student_id?: string;
-  group_id?: string;
-  is_public: boolean;
-  assigned_by: string;
+  user_id: string;
+  assigned_by?: string;
   assigned_at: string;
+  due_date?: string;
+  is_completed: boolean;
+  test?: Test;
 }
 
 // Attempt Types
-export type AttemptStatus = 'in_progress' | 'submitted' | 'auto_submitted' | 'disqualified';
-
 export interface StudentTestAttempt {
   id: string;
   test_id: string;
-  student_id: string;
+  user_id: string;
   attempt_number: number;
-  status: AttemptStatus;
+  
+  // Timing
   started_at: string;
   submitted_at?: string;
-  time_spent_seconds: number;
-  total_score: number;
+  time_taken_seconds?: number;
+  
+  // Scores
   total_marks: number;
-  correct_count: number;
-  incorrect_count: number;
-  unanswered_count: number;
+  obtained_marks: number;
+  percentage: number;
+  
+  // Stats
+  total_questions: number;
+  attempted_questions: number;
+  correct_answers: number;
+  wrong_answers: number;
+  skipped_questions: number;
+  
+  // Anti-cheat
+  tab_switches: number;
+  fullscreen_exits: number;
+  copy_attempts: number;
+  right_click_attempts: number;
+  is_flagged: boolean;
+  flag_reason?: string;
+  
+  status: TestStatus;
   is_passed: boolean;
-  anti_cheat_violations: number;
+  
+  created_at: string;
+  updated_at: string;
+  
+  // Relations
+  test?: Test;
+  answers?: StudentAnswer[];
 }
 
 export interface StudentAnswer {
   id: string;
   attempt_id: string;
   question_id: string;
-  selected_options: string[];
-  numeric_answer?: number;
-  is_correct: boolean;
+  selected_options?: string[];
+  text_answer?: string;
+  is_correct?: boolean;
   marks_obtained: number;
   time_spent_seconds: number;
-  answered_at: string;
+  is_marked_for_review: boolean;
+  answered_at?: string;
+  created_at: string;
+  updated_at: string;
+  question?: Question;
 }
 
 export interface StudentWeakQuestion {
   id: string;
-  student_id: string;
+  user_id: string;
   question_id: string;
   topic_id: string;
   wrong_count: number;
   correct_count: number;
   last_attempted_at: string;
   is_mastered: boolean;
+  created_at: string;
+  updated_at: string;
+  question?: Question;
+  topic?: Topic;
 }
 
 // Anti-Cheat Types
 export type ViolationType = 
   | 'tab_switch'
   | 'fullscreen_exit'
-  | 'page_reload'
-  | 'devtools_open'
-  | 'time_tampering'
-  | 'storage_tampering'
-  | 'network_disconnect'
-  | 'copy_paste'
+  | 'copy_attempt'
+  | 'paste_attempt'
   | 'right_click'
-  | 'text_selection'
-  | 'javascript_disabled';
+  | 'devtools_open'
+  | 'network_disconnect'
+  | 'time_tamper'
+  | 'storage_tamper'
+  | 'js_disabled'
+  | 'page_reload'
+  | 'back_button';
 
 export interface AntiCheatLog {
   id: string;
   attempt_id: string;
-  student_id: string;
-  test_id: string;
+  user_id: string;
   violation_type: ViolationType;
-  violation_details?: string;
-  timestamp: string;
-  ip_address?: string;
-  user_agent?: string;
+  violation_details?: Record<string, unknown>;
+  created_at: string;
+}
+
+// Leaderboard Types
+export interface LeaderboardEntry {
+  id: string;
+  user_id: string;
+  total_xp: number;
+  total_coins: number;
+  current_streak: number;
+  longest_streak: number;
+  tests_completed: number;
+  tests_passed: number;
+  average_score: number;
+  rank_position?: number;
+  rank_title: string;
+  last_activity_at: string;
+  created_at: string;
+  updated_at: string;
+  profile?: Profile;
+}
+
+// Certificate Types
+export interface Certificate {
+  id: string;
+  user_id: string;
+  attempt_id: string;
+  test_id?: string;
+  certificate_number: string;
+  issued_at: string;
+  created_at: string;
+  test?: Test;
+  attempt?: StudentTestAttempt;
 }
 
 // Analytics Types
 export interface StudentAnalytics {
-  student_id: string;
+  user_id: string;
   total_tests_taken: number;
   total_score: number;
   total_marks: number;
@@ -237,7 +347,7 @@ export interface StudentAnalytics {
 
 // Gamification Types
 export interface StudentProgress {
-  student_id: string;
+  user_id: string;
   xp: number;
   level: number;
   coins: number;
@@ -246,37 +356,4 @@ export interface StudentProgress {
   achievements: string[];
   streak_days: number;
   last_active_at: string;
-}
-
-export interface Achievement {
-  id: string;
-  name: string;
-  description: string;
-  icon: string;
-  xp_reward: number;
-  coin_reward: number;
-  condition_type: string;
-  condition_value: number;
-}
-
-export interface LeaderboardEntry {
-  rank: number;
-  student_id: string;
-  student_name: string;
-  avatar_url?: string;
-  xp: number;
-  level: number;
-  accuracy: number;
-}
-
-// Certificate Types
-export interface Certificate {
-  id: string;
-  student_id: string;
-  test_id: string;
-  attempt_id: string;
-  certificate_number: string;
-  issued_at: string;
-  template_id: string;
-  pdf_url?: string;
 }
