@@ -23,6 +23,8 @@ import StudentLeaderboard from "./pages/student/StudentLeaderboard";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminSubjects from "./pages/admin/AdminSubjects";
+import AdminTopics from "./pages/admin/AdminTopics";
+import AdminQuestions from "./pages/admin/AdminQuestions";
 
 // Placeholder Pages
 import PlaceholderPage from "./pages/PlaceholderPage";
@@ -56,13 +58,12 @@ const App = () => (
             <Route path="/student/analytics" element={<ProtectedRoute allowedRoles={['student']}><PlaceholderPage title="Analytics" role="student" /></ProtectedRoute>} />
             <Route path="/student/profile" element={<ProtectedRoute allowedRoles={['student']}><PlaceholderPage title="Profile" role="student" /></ProtectedRoute>} />
 
-            {/* Mentor Routes */}
-            <Route path="/mentor/dashboard" element={<ProtectedRoute allowedRoles={['mentor']}><PlaceholderPage title="Mentor Dashboard" role="mentor" /></ProtectedRoute>} />
-            <Route path="/mentor/subjects" element={<ProtectedRoute allowedRoles={['mentor']}><PlaceholderPage title="Subjects" role="mentor" /></ProtectedRoute>} />
-            <Route path="/mentor/topics" element={<ProtectedRoute allowedRoles={['mentor']}><PlaceholderPage title="Topics" role="mentor" /></ProtectedRoute>} />
-            <Route path="/mentor/questions" element={<ProtectedRoute allowedRoles={['mentor']}><PlaceholderPage title="Question Bank" role="mentor" /></ProtectedRoute>} />
+            {/* Mentor Routes - Share admin components */}
+            <Route path="/mentor/dashboard" element={<ProtectedRoute allowedRoles={['mentor']}><AdminDashboard /></ProtectedRoute>} />
+            <Route path="/mentor/subjects" element={<ProtectedRoute allowedRoles={['mentor']}><AdminSubjects /></ProtectedRoute>} />
+            <Route path="/mentor/topics" element={<ProtectedRoute allowedRoles={['mentor']}><AdminTopics /></ProtectedRoute>} />
+            <Route path="/mentor/questions" element={<ProtectedRoute allowedRoles={['mentor']}><AdminQuestions /></ProtectedRoute>} />
             <Route path="/mentor/tests" element={<ProtectedRoute allowedRoles={['mentor']}><PlaceholderPage title="Tests" role="mentor" /></ProtectedRoute>} />
-            <Route path="/mentor/tests/create" element={<ProtectedRoute allowedRoles={['mentor']}><PlaceholderPage title="Create Test" role="mentor" /></ProtectedRoute>} />
             <Route path="/mentor/assignments" element={<ProtectedRoute allowedRoles={['mentor']}><PlaceholderPage title="Assignments" role="mentor" /></ProtectedRoute>} />
             <Route path="/mentor/analytics" element={<ProtectedRoute allowedRoles={['mentor']}><PlaceholderPage title="Analytics" role="mentor" /></ProtectedRoute>} />
             <Route path="/mentor/anti-cheat-logs" element={<ProtectedRoute allowedRoles={['mentor']}><PlaceholderPage title="Anti-Cheat Logs" role="mentor" /></ProtectedRoute>} />
@@ -73,8 +74,8 @@ const App = () => (
             <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['admin']}><AdminUsers /></ProtectedRoute>} />
             <Route path="/admin/roles" element={<ProtectedRoute allowedRoles={['admin']}><AdminUsers /></ProtectedRoute>} />
             <Route path="/admin/subjects" element={<ProtectedRoute allowedRoles={['admin']}><AdminSubjects /></ProtectedRoute>} />
-            <Route path="/admin/topics" element={<ProtectedRoute allowedRoles={['admin']}><PlaceholderPage title="Topics" role="admin" /></ProtectedRoute>} />
-            <Route path="/admin/questions" element={<ProtectedRoute allowedRoles={['admin']}><PlaceholderPage title="Questions" role="admin" /></ProtectedRoute>} />
+            <Route path="/admin/topics" element={<ProtectedRoute allowedRoles={['admin']}><AdminTopics /></ProtectedRoute>} />
+            <Route path="/admin/questions" element={<ProtectedRoute allowedRoles={['admin']}><AdminQuestions /></ProtectedRoute>} />
             <Route path="/admin/tests" element={<ProtectedRoute allowedRoles={['admin']}><PlaceholderPage title="All Tests" role="admin" /></ProtectedRoute>} />
             <Route path="/admin/analytics" element={<ProtectedRoute allowedRoles={['admin']}><PlaceholderPage title="Analytics" role="admin" /></ProtectedRoute>} />
             <Route path="/admin/anti-cheat-logs" element={<ProtectedRoute allowedRoles={['admin']}><PlaceholderPage title="Anti-Cheat Logs" role="admin" /></ProtectedRoute>} />

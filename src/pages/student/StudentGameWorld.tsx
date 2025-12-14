@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StudentLayout } from '@/components/layout/StudentLayout';
 import { XPBadge, CoinBadge } from '@/components/game/GameBadges';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { 
   Star, 
   Lock, 
@@ -11,90 +13,45 @@ import {
   Zap,
   Trophy,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  Loader2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-// Mock game world data
-const mockWorlds = [
-  {
-    id: '1',
-    name: 'Mathematics Kingdom',
-    description: 'Master numbers, algebra, and geometry',
-    color: 'from-blue-500 to-blue-600',
-    bgColor: 'bg-blue-500/10',
-    icon: '🔢',
-    progress: 75,
-    levels: [
-      { id: '1-1', name: 'Basic Arithmetic', status: 'completed', stars: 3, xp: 100 },
-      { id: '1-2', name: 'Fractions & Decimals', status: 'completed', stars: 2, xp: 120 },
-      { id: '1-3', name: 'Algebra Basics', status: 'current', stars: 0, xp: 150 },
-      { id: '1-4', name: 'Geometry', status: 'locked', stars: 0, xp: 180 },
-      { id: '1-5', name: 'Boss: Math Master', status: 'locked', stars: 0, xp: 300, isBoss: true },
-    ],
-  },
-  {
-    id: '2',
-    name: 'Science Lab',
-    description: 'Discover physics, chemistry, and biology',
-    color: 'from-green-500 to-green-600',
-    bgColor: 'bg-green-500/10',
-    icon: '🔬',
-    progress: 40,
-    levels: [
-      { id: '2-1', name: 'Physics Foundations', status: 'completed', stars: 3, xp: 100 },
-      { id: '2-2', name: 'Chemistry Basics', status: 'current', stars: 0, xp: 120 },
-      { id: '2-3', name: 'Biology 101', status: 'locked', stars: 0, xp: 150 },
-      { id: '2-4', name: 'Lab Experiments', status: 'locked', stars: 0, xp: 180 },
-      { id: '2-5', name: 'Boss: Science Champion', status: 'locked', stars: 0, xp: 300, isBoss: true },
-    ],
-  },
-  {
-    id: '3',
-    name: 'Language Arts Tower',
-    description: 'Master grammar, vocabulary, and writing',
-    color: 'from-purple-500 to-purple-600',
-    bgColor: 'bg-purple-500/10',
-    icon: '📚',
-    progress: 20,
-    levels: [
-      { id: '3-1', name: 'Grammar Basics', status: 'completed', stars: 2, xp: 100 },
-      { id: '3-2', name: 'Vocabulary Builder', status: 'locked', stars: 0, xp: 120 },
-      { id: '3-3', name: 'Reading Comprehension', status: 'locked', stars: 0, xp: 150 },
-      { id: '3-4', name: 'Creative Writing', status: 'locked', stars: 0, xp: 180 },
-      { id: '3-5', name: 'Boss: Word Wizard', status: 'locked', stars: 0, xp: 300, isBoss: true },
-    ],
-  },
-  {
-    id: '4',
-    name: 'History Castle',
-    description: 'Journey through time and civilizations',
-    color: 'from-amber-500 to-amber-600',
-    bgColor: 'bg-amber-500/10',
-    icon: '🏰',
-    progress: 0,
-    levels: [
-      { id: '4-1', name: 'Ancient Civilizations', status: 'locked', stars: 0, xp: 100 },
-      { id: '4-2', name: 'Medieval Times', status: 'locked', stars: 0, xp: 120 },
-      { id: '4-3', name: 'Modern History', status: 'locked', stars: 0, xp: 150 },
-      { id: '4-4', name: 'World Wars', status: 'locked', stars: 0, xp: 180 },
-      { id: '4-5', name: 'Boss: Time Traveler', status: 'locked', stars: 0, xp: 300, isBoss: true },
-    ],
-  },
-];
+interface Topic {
+  id: string;
+  name: string;
+  status: 'completed' | 'current' | 'locked';
+  stars: number;
+  xp: number;
+  isBoss?: boolean;
+}
+
+interface World {
+  id: string;
+  name: string;
+  description: string;
+  color: string;
+  bgColor: string;
+  icon: string;
+  progress: number;
+  topics: Topic[];
+}
 
 interface LevelNodeProps {
-  level: {
-    id: string;
-    name: string;
-    status: string;
-    stars: number;
-    xp: number;
-    isBoss?: boolean;
-  };
+  level: Topic;
   index: number;
   worldColor: string;
 }
+
+const worldColors = [
+  { color: 'from-blue-500 to-blue-600', bgColor: 'bg-blue-500/10', icon: '🔢' },
+  { color: 'from-green-500 to-green-600', bgColor: 'bg-green-500/10', icon: '🔬' },
+  { color: 'from-purple-500 to-purple-600', bgColor: 'bg-purple-500/10', icon: '📚' },
+  { color: 'from-amber-500 to-amber-600', bgColor: 'bg-amber-500/10', icon: '🏰' },
+  { color: 'from-pink-500 to-pink-600', bgColor: 'bg-pink-500/10', icon: '🎨' },
+  { color: 'from-cyan-500 to-cyan-600', bgColor: 'bg-cyan-500/10', icon: '💻' },
+];
 
 function LevelNode({ level, index, worldColor }: LevelNodeProps) {
   const isCompleted = level.status === 'completed';
@@ -164,7 +121,149 @@ function LevelNode({ level, index, worldColor }: LevelNodeProps) {
 }
 
 export default function StudentGameWorld() {
-  const [selectedWorld, setSelectedWorld] = useState(mockWorlds[0]);
+  const { user } = useAuth();
+  const [worlds, setWorlds] = useState<World[]>([]);
+  const [selectedWorld, setSelectedWorld] = useState<World | null>(null);
+  const [userStats, setUserStats] = useState({ xp: 0, level: 1, coins: 0 });
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchGameWorldData();
+  }, [user?.id]);
+
+  const fetchGameWorldData = async () => {
+    try {
+      // Fetch subjects
+      const { data: subjects } = await supabase
+        .from('subjects')
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+
+      // Fetch topics for each subject
+      const { data: topics } = await supabase
+        .from('topics')
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+
+      // Fetch user's completed topics (based on test attempts)
+      const { data: completedAttempts } = await supabase
+        .from('student_test_attempts')
+        .select('test_id, is_passed, tests(test_topics(topic_id))')
+        .eq('user_id', user?.id || '')
+        .in('status', ['submitted', 'auto_submitted']);
+
+      // Fetch user stats
+      const { data: leaderboardData } = await supabase
+        .from('leaderboard')
+        .select('*')
+        .eq('user_id', user?.id || '')
+        .maybeSingle();
+
+      // Get completed topic IDs
+      const completedTopicIds = new Set<string>();
+      completedAttempts?.forEach((attempt: any) => {
+        if (attempt.is_passed && attempt.tests?.test_topics) {
+          attempt.tests.test_topics.forEach((tt: any) => {
+            completedTopicIds.add(tt.topic_id);
+          });
+        }
+      });
+
+      // Build worlds from subjects
+      const formattedWorlds: World[] = (subjects || []).map((subject, subjectIndex) => {
+        const subjectTopics = (topics || []).filter(t => t.subject_id === subject.id);
+        const colorSet = worldColors[subjectIndex % worldColors.length];
+        
+        let foundCurrent = false;
+        const formattedTopics: Topic[] = subjectTopics.map((topic, index) => {
+          const isCompleted = completedTopicIds.has(topic.id);
+          let status: 'completed' | 'current' | 'locked' = 'locked';
+          
+          if (isCompleted) {
+            status = 'completed';
+          } else if (!foundCurrent) {
+            status = 'current';
+            foundCurrent = true;
+          }
+
+          // Last topic in each subject is a boss level
+          const isBoss = index === subjectTopics.length - 1;
+
+          return {
+            id: topic.id,
+            name: topic.name,
+            status,
+            stars: isCompleted ? Math.floor(Math.random() * 2) + 2 : 0, // Random 2-3 stars for completed
+            xp: topic.xp_reward || 100,
+            isBoss,
+          };
+        });
+
+        // Calculate progress
+        const completedCount = formattedTopics.filter(t => t.status === 'completed').length;
+        const progress = formattedTopics.length > 0 
+          ? Math.round((completedCount / formattedTopics.length) * 100)
+          : 0;
+
+        return {
+          id: subject.id,
+          name: subject.name,
+          description: subject.description || 'Explore and master this subject',
+          color: colorSet.color,
+          bgColor: colorSet.bgColor,
+          icon: colorSet.icon,
+          progress,
+          topics: formattedTopics,
+        };
+      });
+
+      setWorlds(formattedWorlds);
+      if (formattedWorlds.length > 0) {
+        setSelectedWorld(formattedWorlds[0]);
+      }
+
+      // Set user stats
+      const xp = leaderboardData?.total_xp || 0;
+      setUserStats({
+        xp,
+        level: Math.floor(xp / 1000) + 1,
+        coins: leaderboardData?.total_coins || 0,
+      });
+
+    } catch (error) {
+      console.error('Error fetching game world data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <StudentLayout>
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </StudentLayout>
+    );
+  }
+
+  if (worlds.length === 0) {
+    return (
+      <StudentLayout>
+        <div className="min-h-screen bg-game-sky">
+          <div className="max-w-7xl mx-auto p-6">
+            <div className="text-center py-20">
+              <Sparkles className="w-16 h-16 mx-auto mb-4 text-game-gold" />
+              <h2 className="text-2xl font-bold font-game mb-2">No Worlds Available Yet</h2>
+              <p className="text-muted-foreground">Check back soon for new learning adventures!</p>
+            </div>
+          </div>
+        </div>
+      </StudentLayout>
+    );
+  }
 
   return (
     <StudentLayout>
@@ -182,8 +281,8 @@ export default function StudentGameWorld() {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <XPBadge xp={2450} level={12} />
-              <CoinBadge coins={350} />
+              <XPBadge xp={userStats.xp} level={userStats.level} />
+              <CoinBadge coins={userStats.coins} />
             </div>
           </div>
 
@@ -191,13 +290,13 @@ export default function StudentGameWorld() {
             {/* World Selection */}
             <div className="lg:col-span-1 space-y-3">
               <h2 className="font-bold text-lg mb-4">Select World</h2>
-              {mockWorlds.map((world) => (
+              {worlds.map((world) => (
                 <Card 
                   key={world.id}
-                  variant={selectedWorld.id === world.id ? "gameHighlight" : "interactive"}
+                  variant={selectedWorld?.id === world.id ? "gameHighlight" : "interactive"}
                   className={cn(
                     "cursor-pointer transition-all",
-                    selectedWorld.id === world.id && "ring-2 ring-primary"
+                    selectedWorld?.id === world.id && "ring-2 ring-primary"
                   )}
                   onClick={() => setSelectedWorld(world)}
                 >
@@ -223,7 +322,7 @@ export default function StudentGameWorld() {
                       </div>
                       <ChevronRight className={cn(
                         "w-5 h-5 transition-colors",
-                        selectedWorld.id === world.id ? "text-primary" : "text-muted-foreground"
+                        selectedWorld?.id === world.id ? "text-primary" : "text-muted-foreground"
                       )} />
                     </div>
                   </CardContent>
@@ -232,97 +331,110 @@ export default function StudentGameWorld() {
             </div>
 
             {/* Level Map */}
-            <Card variant="glass" className="lg:col-span-3 overflow-hidden">
-              <div className={cn(
-                "p-6 bg-gradient-to-br",
-                selectedWorld.color.replace('from-', 'from-').replace('to-', 'to-'),
-                "bg-opacity-10"
-              )}>
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-4xl backdrop-blur">
-                    {selectedWorld.icon}
+            {selectedWorld && (
+              <Card variant="glass" className="lg:col-span-3 overflow-hidden">
+                <div className={cn(
+                  "p-6 bg-gradient-to-br",
+                  selectedWorld.color,
+                  "bg-opacity-10"
+                )}>
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-4xl backdrop-blur">
+                      {selectedWorld.icon}
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold font-game text-white drop-shadow-lg">{selectedWorld.name}</h2>
+                      <p className="text-white/80">{selectedWorld.description}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h2 className="text-2xl font-bold font-game text-white drop-shadow-lg">{selectedWorld.name}</h2>
-                    <p className="text-white/80">{selectedWorld.description}</p>
-                  </div>
-                </div>
 
-                {/* Progress Bar */}
-                <div className="mb-8">
-                  <div className="flex justify-between text-sm text-white/80 mb-2">
-                    <span>World Progress</span>
-                    <span>{selectedWorld.progress}%</span>
-                  </div>
-                  <div className="h-4 bg-white/20 rounded-full overflow-hidden backdrop-blur">
-                    <div 
-                      className="h-full bg-gradient-to-r from-game-gold to-game-star rounded-full transition-all duration-500"
-                      style={{ width: `${selectedWorld.progress}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Level Path */}
-                <div className="relative">
-                  {/* Path Line */}
-                  <div className="absolute top-1/2 left-0 right-0 h-2 bg-white/20 rounded-full -translate-y-1/2 z-0" />
-                  
-                  {/* Level Nodes */}
-                  <div className="relative z-10 flex justify-between items-center py-8">
-                    {selectedWorld.levels.map((level, index) => (
-                      <LevelNode 
-                        key={level.id} 
-                        level={level} 
-                        index={index}
-                        worldColor={selectedWorld.color}
+                  {/* Progress Bar */}
+                  <div className="mb-8">
+                    <div className="flex justify-between text-sm text-white/80 mb-2">
+                      <span>World Progress</span>
+                      <span>{selectedWorld.progress}%</span>
+                    </div>
+                    <div className="h-4 bg-white/20 rounded-full overflow-hidden backdrop-blur">
+                      <div 
+                        className="h-full bg-gradient-to-r from-game-gold to-game-star rounded-full transition-all duration-500"
+                        style={{ width: `${selectedWorld.progress}%` }}
                       />
-                    ))}
+                    </div>
                   </div>
-                </div>
 
-                {/* Legend */}
-                <div className="flex flex-wrap justify-center gap-4 mt-8 text-sm text-white/80">
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded bg-game-gold"></div>
-                    <span>Current Level</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4" />
-                    <span>Completed</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Lock className="w-4 h-4" />
-                    <span>Locked</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">👑</span>
-                    <span>Boss Level</span>
+                  {/* Level Path */}
+                  {selectedWorld.topics.length > 0 ? (
+                    <div className="relative">
+                      {/* Path Line */}
+                      <div className="absolute top-1/2 left-0 right-0 h-2 bg-white/20 rounded-full -translate-y-1/2 z-0" />
+                      
+                      {/* Level Nodes */}
+                      <div className="relative z-10 flex justify-between items-center py-8 overflow-x-auto">
+                        {selectedWorld.topics.map((topic, index) => (
+                          <LevelNode 
+                            key={topic.id} 
+                            level={topic} 
+                            index={index}
+                            worldColor={selectedWorld.color}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 text-white/60">
+                      <Lock className="w-12 h-12 mx-auto mb-4" />
+                      <p>No topics available in this world yet</p>
+                    </div>
+                  )}
+
+                  {/* Legend */}
+                  <div className="flex flex-wrap justify-center gap-4 mt-8 text-sm text-white/80">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 rounded bg-game-gold"></div>
+                      <span>Current Level</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4" />
+                      <span>Completed</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Lock className="w-4 h-4" />
+                      <span>Locked</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">👑</span>
+                      <span>Boss Level</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </Card>
+              </Card>
+            )}
           </div>
 
           {/* Current Quest */}
-          <Card variant="gameHighlight" className="p-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-game-gold to-game-star flex items-center justify-center shadow-glow">
-                  <Zap className="w-7 h-7 text-primary-foreground" />
+          {selectedWorld && selectedWorld.topics.length > 0 && (
+            <Card variant="gameHighlight" className="p-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-game-gold to-game-star flex items-center justify-center shadow-glow">
+                    <Zap className="w-7 h-7 text-primary-foreground" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold font-game">Current Quest</h3>
+                    <p className="text-muted-foreground">
+                      Complete <strong>{selectedWorld.topics.find(t => t.status === 'current')?.name || 'all levels'}</strong> to unlock the next level!
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-xl font-bold font-game">Current Quest</h3>
-                  <p className="text-muted-foreground">
-                    Complete <strong>Algebra Basics</strong> to unlock Geometry!
-                  </p>
-                </div>
+                <Link to={`/student/test/${selectedWorld.topics.find(t => t.status === 'current')?.id || ''}`}>
+                  <Button variant="game" size="lg" disabled={!selectedWorld.topics.find(t => t.status === 'current')}>
+                    <Trophy className="w-5 h-5" />
+                    Continue Quest
+                  </Button>
+                </Link>
               </div>
-              <Button variant="game" size="lg">
-                <Trophy className="w-5 h-5" />
-                Continue Quest
-              </Button>
-            </div>
-          </Card>
+            </Card>
+          )}
         </div>
       </div>
     </StudentLayout>
