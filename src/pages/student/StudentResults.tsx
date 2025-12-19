@@ -7,7 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
+import { CertificateGenerator, CertificatePreview } from '@/components/CertificateGenerator';
 import {
   Trophy,
   Clock,
@@ -72,9 +74,11 @@ interface AnswerData {
 
 export default function StudentResults() {
   const { id: attemptId } = useParams<{ id: string }>();
+  const { user } = useAuth();
   const [attempt, setAttempt] = useState<AttemptData | null>(null);
   const [answers, setAnswers] = useState<AnswerData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [certificateNumber, setCertificateNumber] = useState('');
 
   useEffect(() => {
     if (attemptId) {
@@ -383,6 +387,38 @@ export default function StudentResults() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Certificate for Passed Tests */}
+        {attempt.is_passed && (
+          <Card variant="gameHighlight">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Award className="w-5 h-5 text-game-gold" />
+                Your Certificate
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <CertificatePreview
+                studentName={user?.full_name || 'Student'}
+                testTitle={attempt.tests.title}
+                score={attempt.obtained_marks}
+                totalMarks={attempt.total_marks}
+                percentage={attempt.percentage}
+                completedDate={attempt.submitted_at}
+                certificateNumber={`CERT-${attemptId?.slice(0, 8).toUpperCase()}`}
+              />
+              <CertificateGenerator
+                studentName={user?.full_name || 'Student'}
+                testTitle={attempt.tests.title}
+                score={attempt.obtained_marks}
+                totalMarks={attempt.total_marks}
+                percentage={attempt.percentage}
+                completedDate={attempt.submitted_at}
+                certificateNumber={`CERT-${attemptId?.slice(0, 8).toUpperCase()}`}
+              />
+            </CardContent>
+          </Card>
+        )}
 
         {/* Actions */}
         <div className="flex gap-4">

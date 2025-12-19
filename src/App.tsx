@@ -22,6 +22,7 @@ import StudentTestTaking from "./pages/student/StudentTestTaking";
 import StudentResults from "./pages/student/StudentResults";
 import StudentAnalytics from "./pages/student/StudentAnalytics";
 import StudentProfile from "./pages/student/StudentProfile";
+import StudentWeakTests from "./pages/student/StudentWeakTests";
 
 // Admin Pages
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -57,6 +58,7 @@ const App = () => (
             <Route path="/student/tests" element={<ProtectedRoute allowedRoles={['student']}><StudentTests /></ProtectedRoute>} />
             <Route path="/student/test/:id" element={<ProtectedRoute allowedRoles={['student']}><StudentTestTaking /></ProtectedRoute>} />
             <Route path="/student/results/:id" element={<ProtectedRoute allowedRoles={['student']}><StudentResults /></ProtectedRoute>} />
+            <Route path="/student/weak-tests" element={<ProtectedRoute allowedRoles={['student']}><StudentWeakTests /></ProtectedRoute>} />
             <Route path="/student/leaderboard" element={<ProtectedRoute allowedRoles={['student']}><StudentLeaderboard /></ProtectedRoute>} />
             <Route path="/student/analytics" element={<ProtectedRoute allowedRoles={['student']}><StudentAnalytics /></ProtectedRoute>} />
             <Route path="/student/profile" element={<ProtectedRoute allowedRoles={['student']}><StudentProfile /></ProtectedRoute>} />
