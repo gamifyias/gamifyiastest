@@ -68,7 +68,7 @@ export default function AdminQuestions() {
   // Form state
   const [formData, setFormData] = useState({
     question_text: '',
-    question_type: 'mcq',
+    question_type: 'mcq_single',
     difficulty: 'medium',
     marks: 1,
     negative_marks: 0,
@@ -124,7 +124,7 @@ export default function AdminQuestions() {
       return;
     }
 
-    if (formData.question_type === 'mcq' || formData.question_type === 'msq') {
+    if (formData.question_type === 'mcq_single' || formData.question_type === 'mcq_multiple') {
       const validOptions = options.filter(o => o.option_text.trim());
       if (validOptions.length < 2) {
         toast.error('Please add at least 2 options');
@@ -152,7 +152,7 @@ export default function AdminQuestions() {
         // Delete old options and insert new ones
         await supabase.from('question_options').delete().eq('question_id', editingQuestion.id);
         
-        if (formData.question_type === 'mcq' || formData.question_type === 'msq') {
+        if (formData.question_type === 'mcq_single' || formData.question_type === 'mcq_multiple') {
           const validOptions = options.filter(o => o.option_text.trim());
           await supabase.from('question_options').insert(
             validOptions.map((o, idx) => ({
@@ -179,7 +179,7 @@ export default function AdminQuestions() {
         if (error) throw error;
 
         // Insert options
-        if (formData.question_type === 'mcq' || formData.question_type === 'msq') {
+        if (formData.question_type === 'mcq_single' || formData.question_type === 'mcq_multiple') {
           const validOptions = options.filter(o => o.option_text.trim());
           await supabase.from('question_options').insert(
             validOptions.map((o, idx) => ({
@@ -259,7 +259,7 @@ export default function AdminQuestions() {
     setEditingQuestion(null);
     setFormData({
       question_text: '',
-      question_type: 'mcq',
+      question_type: 'mcq_single',
       difficulty: 'medium',
       marks: 1,
       negative_marks: 0,
@@ -290,8 +290,8 @@ export default function AdminQuestions() {
 
   const handleOptionChange = (index: number, field: 'option_text' | 'is_correct', value: string | boolean) => {
     const newOptions = [...options];
-    if (field === 'is_correct' && formData.question_type === 'mcq') {
-      // For MCQ, only one can be correct
+    if (field === 'is_correct' && formData.question_type === 'mcq_single') {
+      // For MCQ single, only one can be correct
       newOptions.forEach((o, i) => {
         o.is_correct = i === index;
       });
@@ -316,9 +316,9 @@ export default function AdminQuestions() {
 
   const getTypeLabel = (t: string) => {
     switch(t) {
-      case 'mcq': return 'Multiple Choice';
-      case 'msq': return 'Multiple Select';
-      case 'fill': return 'Fill in Blank';
+      case 'mcq_single': return 'MCQ (Single)';
+      case 'mcq_multiple': return 'MCQ (Multiple)';
+      case 'numeric': return 'Numeric';
       case 'true_false': return 'True/False';
       default: return t;
     }
@@ -424,10 +424,10 @@ export default function AdminQuestions() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="mcq">Multiple Choice (Single)</SelectItem>
-                          <SelectItem value="msq">Multiple Select</SelectItem>
+                          <SelectItem value="mcq_single">MCQ (Single Answer)</SelectItem>
+                          <SelectItem value="mcq_multiple">MCQ (Multiple Answers)</SelectItem>
                           <SelectItem value="true_false">True/False</SelectItem>
-                          <SelectItem value="fill">Fill in the Blank</SelectItem>
+                          <SelectItem value="numeric">Numeric Answer</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -473,8 +473,8 @@ export default function AdminQuestions() {
                     </div>
                   </div>
 
-                  {/* Options for MCQ/MSQ */}
-                  {(formData.question_type === 'mcq' || formData.question_type === 'msq') && (
+                  {/* Options for MCQ types */}
+                  {(formData.question_type === 'mcq_single' || formData.question_type === 'mcq_multiple') && (
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <Label>Options *</Label>
@@ -520,7 +520,7 @@ export default function AdminQuestions() {
                         </div>
                       ))}
                       <p className="text-xs text-muted-foreground">
-                        {formData.question_type === 'mcq' 
+                        {formData.question_type === 'mcq_single' 
                           ? 'Select one correct answer' 
                           : 'Select all correct answers'}
                       </p>
