@@ -17,6 +17,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { useLocation } from 'react-router-dom';
 import { format } from 'date-fns';
+import { TestPreview } from '@/components/admin/TestPreview';
 import {
   Plus,
   ClipboardList,
@@ -34,6 +35,7 @@ import {
   CheckCircle,
   XCircle,
   AlertTriangle,
+  Filter,
 } from 'lucide-react';
 
 interface Test {
@@ -95,9 +97,13 @@ export default function AdminTests() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewTestId, setPreviewTestId] = useState<string>('');
   const [selectedTest, setSelectedTest] = useState<Test | null>(null);
   const [selectedQuestions, setSelectedQuestions] = useState<string[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
+  const [questionFilterTopic, setQuestionFilterTopic] = useState<string>('all');
+  const [filteredTopicsForQuestions, setFilteredTopicsForQuestions] = useState<Topic[]>([]);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -133,6 +139,16 @@ export default function AdminTests() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Update topic filter when subject changes
+  useEffect(() => {
+    if (formData.subject_id) {
+      setFilteredTopicsForQuestions(topics.filter(t => t.subject_id === formData.subject_id));
+    } else {
+      setFilteredTopicsForQuestions([]);
+    }
+    setQuestionFilterTopic('all');
+  }, [formData.subject_id, topics]);
 
   const fetchData = async () => {
     try {
@@ -322,9 +338,16 @@ export default function AdminTests() {
     test.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const filteredQuestions = questions.filter(q => 
-    !formData.subject_id || q.subject_id === formData.subject_id
-  );
+  const filteredQuestions = questions.filter(q => {
+    const matchesSubject = !formData.subject_id || q.subject_id === formData.subject_id;
+    const matchesTopic = questionFilterTopic === 'all' || q.topic_id === questionFilterTopic;
+    return matchesSubject && matchesTopic;
+  });
+
+  const handlePreviewTest = (testId: string) => {
+    setPreviewTestId(testId);
+    setIsPreviewOpen(true);
+  };
 
   if (isLoading) {
     return (
@@ -481,9 +504,9 @@ export default function AdminTests() {
                   </TabsContent>
 
                   <TabsContent value="questions" className="space-y-4 mt-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
                       <p className="text-sm text-muted-foreground">
-                        Selected: {selectedQuestions.length} questions
+                        Selected: {selectedQuestions.length} questions | Available: {filteredQuestions.length}
                       </p>
                       <div className="flex gap-2">
                         <Badge variant="outline">Easy: {formData.easy_percentage}%</Badge>
@@ -491,38 +514,85 @@ export default function AdminTests() {
                         <Badge variant="outline">Hard: {formData.hard_percentage}%</Badge>
                       </div>
                     </div>
-                    <ScrollArea className="h-[300px] border rounded-lg p-4">
-                      {filteredQuestions.map(q => (
-                        <div
-                          key={q.id}
-                          className="flex items-start gap-3 p-3 border-b last:border-0"
-                        >
-                          <Checkbox
-                            checked={selectedQuestions.includes(q.id)}
-                            onCheckedChange={checked => {
-                              if (checked) {
-                                setSelectedQuestions([...selectedQuestions, q.id]);
-                              } else {
-                                setSelectedQuestions(selectedQuestions.filter(id => id !== q.id));
-                              }
-                            }}
-                          />
-                          <div className="flex-1">
-                            <p className="text-sm font-medium">{q.question_text}</p>
-                            <div className="flex gap-2 mt-1">
-                              <Badge variant="secondary" className="text-xs">
-                                {q.subjects?.name}
-                              </Badge>
-                              <Badge variant="outline" className="text-xs">
-                                {q.difficulty}
-                              </Badge>
-                              <Badge variant="outline" className="text-xs">
-                                {q.marks} marks
-                              </Badge>
+
+                    {/* Topic Filter */}
+                    <div className="flex items-center gap-2">
+                      <Filter className="w-4 h-4 text-muted-foreground" />
+                      <Select
+                        value={questionFilterTopic}
+                        onValueChange={setQuestionFilterTopic}
+                        disabled={!formData.subject_id}
+                      >
+                        <SelectTrigger className="w-[200px]">
+                          <SelectValue placeholder="Filter by topic" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Topics</SelectItem>
+                          {filteredTopicsForQuestions.map(t => (
+                            <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const allIds = filteredQuestions.map(q => q.id);
+                          setSelectedQuestions([...new Set([...selectedQuestions, ...allIds])]);
+                        }}
+                      >
+                        Select All
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSelectedQuestions([])}
+                      >
+                        Clear
+                      </Button>
+                    </div>
+
+                    <ScrollArea className="h-[280px] border rounded-lg p-4">
+                      {filteredQuestions.length === 0 ? (
+                        <div className="text-center text-muted-foreground py-8">
+                          No questions found. {!formData.subject_id && 'Select a subject first.'}
+                        </div>
+                      ) : (
+                        filteredQuestions.map(q => (
+                          <div
+                            key={q.id}
+                            className="flex items-start gap-3 p-3 border-b last:border-0 hover:bg-muted/50"
+                          >
+                            <Checkbox
+                              checked={selectedQuestions.includes(q.id)}
+                              onCheckedChange={checked => {
+                                if (checked) {
+                                  setSelectedQuestions([...selectedQuestions, q.id]);
+                                } else {
+                                  setSelectedQuestions(selectedQuestions.filter(id => id !== q.id));
+                                }
+                              }}
+                            />
+                            <div className="flex-1">
+                              <p className="text-sm font-medium">{q.question_text}</p>
+                              <div className="flex flex-wrap gap-2 mt-1">
+                                <Badge variant="secondary" className="text-xs">
+                                  {q.subjects?.name}
+                                </Badge>
+                                <Badge variant="outline" className="text-xs">
+                                  {q.topics?.name}
+                                </Badge>
+                                <Badge variant="outline" className="text-xs">
+                                  {q.difficulty}
+                                </Badge>
+                                <Badge variant="outline" className="text-xs">
+                                  {q.marks} marks
+                                </Badge>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        ))
+                      )}
                     </ScrollArea>
                   </TabsContent>
 
@@ -718,6 +788,14 @@ export default function AdminTests() {
                       <Button
                         variant="outline"
                         size="sm"
+                        onClick={() => handlePreviewTest(test.id)}
+                      >
+                        <Eye size={16} />
+                        Preview
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => {
                           setSelectedTest(test);
                           setIsAssignDialogOpen(true);
@@ -795,6 +873,13 @@ export default function AdminTests() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Test Preview */}
+        <TestPreview 
+          testId={previewTestId} 
+          isOpen={isPreviewOpen} 
+          onClose={() => setIsPreviewOpen(false)} 
+        />
       </div>
     </AdminLayout>
   );
