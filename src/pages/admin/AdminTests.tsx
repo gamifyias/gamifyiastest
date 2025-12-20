@@ -225,17 +225,26 @@ export default function AdminTests() {
     }
 
     try {
-      const assignments = selectedStudents.map(studentUserId => ({
-        test_id: selectedTest.id,
-        user_id: studentUserId,
-        assigned_by: user?.id,
-      }));
+      // For each student, delete existing assignment first then create new one
+      // This allows re-assigning the same test to reset their attempts
+      for (const studentUserId of selectedStudents) {
+        // Delete any existing assignment for this test-user combo
+        await supabase
+          .from('test_assignments')
+          .delete()
+          .eq('test_id', selectedTest.id)
+          .eq('user_id', studentUserId);
 
-      const { error } = await supabase
-        .from('test_assignments')
-        .insert(assignments);
-
-      if (error) throw error;
+        // Also reset the is_completed flag by creating fresh assignment
+        await supabase
+          .from('test_assignments')
+          .insert({
+            test_id: selectedTest.id,
+            user_id: studentUserId,
+            assigned_by: user?.id,
+            is_completed: false,
+          });
+      }
 
       toast.success(`Test assigned to ${selectedStudents.length} student(s)`);
       setIsAssignDialogOpen(false);
