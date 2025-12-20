@@ -15,6 +15,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { BulkQuestionImport } from '@/components/admin/BulkQuestionImport';
 
 interface Question {
   id: string;
@@ -348,16 +349,22 @@ export default function AdminQuestions() {
               Manage questions by subject and topic ({questions.length} total)
             </p>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={(open) => {
-            setIsDialogOpen(open);
-            if (!open) resetForm();
-          }}>
-            <DialogTrigger asChild>
-              <Button variant="admin">
-                <Plus size={18} />
-                Add Question
-              </Button>
-            </DialogTrigger>
+          <div className="flex gap-2">
+            <BulkQuestionImport 
+              subjects={subjects} 
+              topics={topics} 
+              onImportComplete={fetchData}
+            />
+            <Dialog open={isDialogOpen} onOpenChange={(open) => {
+              setIsDialogOpen(open);
+              if (!open) resetForm();
+            }}>
+              <DialogTrigger asChild>
+                <Button variant="admin">
+                  <Plus size={18} />
+                  Add Question
+                </Button>
+              </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh]">
               <DialogHeader>
                 <DialogTitle>{editingQuestion ? 'Edit Question' : 'Add New Question'}</DialogTitle>
@@ -575,7 +582,8 @@ export default function AdminQuestions() {
                 </div>
               </ScrollArea>
             </DialogContent>
-          </Dialog>
+            </Dialog>
+          </div>
         </div>
 
         {/* Filters */}
