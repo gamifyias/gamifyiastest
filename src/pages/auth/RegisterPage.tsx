@@ -81,18 +81,18 @@ export default function RegisterPage() {
         <Card variant="elevated" className="shadow-pixel-lg">
           <CardHeader className="text-center">
             <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-to-br from-game-gold to-game-star flex items-center justify-center shadow-pixel">
-              <span className="text-primary-foreground font-pixel text-lg">TQ</span>
+              <span className="text-primary-foreground font-pixel text-lg">GI</span>
             </div>
             <CardTitle className="text-2xl">Create Account</CardTitle>
             <CardDescription>
-              Join TestQuest and start your learning adventure
+              Join Gamify IAS and start your learning adventure
             </CardDescription>
           </CardHeader>
 
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Role Selection */}
-              <div className="space-y-2">
+              {/* <div className="space-y-2">
                 <Label>I want to join as</Label>
                 <div className="grid grid-cols-2 gap-3">
                   {roles.map((role) => (
@@ -113,7 +113,7 @@ export default function RegisterPage() {
                     </button>
                   ))}
                 </div>
-              </div>
+              </div> */}
 
               {/* Full Name */}
               <div className="space-y-2">

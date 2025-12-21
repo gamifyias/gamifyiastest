@@ -58,7 +58,7 @@ export default function LoginPage() {
         <Card variant="elevated" className="shadow-pixel-lg">
           <CardHeader className="text-center">
             <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-to-br from-game-gold to-game-star flex items-center justify-center shadow-pixel">
-              <span className="text-primary-foreground font-pixel text-lg">TQ</span>
+              <span className="text-primary-foreground font-pixel text-lg">GI</span>
             </div>
             <CardTitle className="text-2xl">Welcome Back!</CardTitle>
             <CardDescription>

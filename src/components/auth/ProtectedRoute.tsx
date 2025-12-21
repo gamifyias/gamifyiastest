@@ -17,7 +17,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-4">
           <div className="w-16 h-16 mx-auto rounded-xl bg-gradient-to-br from-game-gold to-game-star flex items-center justify-center shadow-pixel animate-pulse">
-            <span className="text-primary-foreground font-pixel text-sm">TQ</span>
+            <span className="text-primary-foreground font-pixel text-sm">GI</span>
           </div>
           <p className="text-muted-foreground">Loading...</p>
         </div>
@@ -58,7 +58,7 @@ export function PublicRoute({ children }: PublicRouteProps) {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-4">
           <div className="w-16 h-16 mx-auto rounded-xl bg-gradient-to-br from-game-gold to-game-star flex items-center justify-center shadow-pixel animate-pulse">
-            <span className="text-primary-foreground font-pixel text-sm">TQ</span>
+            <span className="text-primary-foreground font-pixel text-sm">GI</span>
           </div>
           <p className="text-muted-foreground">Loading...</p>
         </div>

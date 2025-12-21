@@ -37,7 +37,7 @@ const navItems = [
   { icon: Gamepad2, label: 'Game World', href: '/student/game' },
   { icon: ClipboardList, label: 'My Tests', href: '/student/tests' },
   { icon: Target, label: 'Weak Areas', href: '/student/weak-tests' },
-  { icon: Trophy, label: 'Leaderboard', href: '/student/leaderboard' },
+  // { icon: Trophy, label: 'Leaderboard', href: '/student/leaderboard' },
   { icon: BarChart3, label: 'Analytics', href: '/student/analytics' },
   { icon: User, label: 'Profile', href: '/student/profile' },
 ];
@@ -52,9 +52,9 @@ function StudentSidebarContent() {
       <div className="p-4 border-b border-sidebar-border">
         <Link to="/student/dashboard" className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-game-gold to-game-star flex items-center justify-center shadow-pixel shrink-0">
-            <span className="text-primary-foreground font-pixel text-xs">TQ</span>
+            <span className="text-primary-foreground font-pixel text-xs">G</span>
           </div>
-          <span className="font-game font-bold text-lg text-sidebar-foreground">TestQuest</span>
+          <span className="font-game font-bold text-lg text-sidebar-foreground">Gamify IAS</span>
         </Link>
       </div>
 
@@ -143,9 +143,9 @@ export function StudentLayout({ children }: StudentLayoutProps) {
             <SidebarTrigger />
             <div className="flex-1" />
             <div className="flex items-center gap-2">
-              <XPBadge xp={0} level={1} size="sm" />
-              <CoinBadge coins={0} size="sm" />
-              <StreakBadge days={0} size="sm" />
+              {/* <XPBadge xp={0} level={1} size="sm" /> */}
+                {/* <CoinBadge coins={0} size="sm" />
+                <StreakBadge days={0} size="sm" /> */}
             </div>
           </header>
           {children}

@@ -63,10 +63,7 @@ export default function LandingPage() {
       <header className="relative z-10 px-6 py-4">
         <nav className="max-w-7xl mx-auto flex items-center justify-between">
           <Link to="/" className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-game-gold to-game-star flex items-center justify-center shadow-pixel">
-              <span className="text-primary-foreground font-pixel text-sm">TQ</span>
-            </div>
-            <span className="font-game font-bold text-2xl text-foreground">TestQuest</span>
+            <span className="font-game font-bold text-2xl text-foreground">Gamify IAS</span>
           </Link>
           <div className="flex items-center gap-4">
             <Link to="/auth/login">
@@ -108,13 +105,13 @@ export default function LandingPage() {
             <Link to="/auth/register">
               <Button variant="game" size="xl" className="text-lg">
                 <Gamepad2 size={24} />
-                Start Your Quest
+                Sign Up
               </Button>
             </Link>
             <Link to="/auth/login">
               <Button variant="gameOutline" size="xl" className="text-lg">
                 <Users size={24} />
-                Join as Mentor
+                Login
               </Button>
             </Link>
           </div>
@@ -157,115 +154,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Role Section */}
-      <section className="relative z-10 px-6 py-20">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold font-game mb-4">Choose Your Role</h2>
-            <p className="text-xl text-muted-foreground">
-              Whether you're teaching or learning, TestQuest has you covered.
-            </p>
-          </div>
 
-          <div className="grid md:grid-cols-3 gap-8">
-            {/* Student Card */}
-            <Card variant="game" className="overflow-hidden">
-              <div className="h-32 bg-gradient-to-br from-game-pipe to-game-pipe-dark flex items-center justify-center">
-                <Gamepad2 className="w-16 h-16 text-white" />
-              </div>
-              <CardContent className="p-6 text-center">
-                <h3 className="text-2xl font-bold font-game mb-2">Student</h3>
-                <p className="text-muted-foreground mb-4">
-                  Embark on learning quests, take tests, earn XP, and compete on leaderboards.
-                </p>
-                <ul className="text-left text-sm space-y-2 mb-6">
-                  <li className="flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-game-gold" />
-                    Gamified test experience
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Target className="w-4 h-4 text-game-gold" />
-                    Adaptive weak-area retests
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Trophy className="w-4 h-4 text-game-gold" />
-                    Achievements & certificates
-                  </li>
-                </ul>
-                <Link to="/auth/register?role=student">
-                  <Button variant="gameSecondary" className="w-full">
-                    Start Learning
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-
-            {/* Mentor Card */}
-            <Card variant="game" className="overflow-hidden">
-              <div className="h-32 bg-gradient-to-br from-secondary to-secondary/80 flex items-center justify-center">
-                <BookOpen className="w-16 h-16 text-white" />
-              </div>
-              <CardContent className="p-6 text-center">
-                <h3 className="text-2xl font-bold font-game mb-2">Mentor</h3>
-                <p className="text-muted-foreground mb-4">
-                  Create subjects, manage questions, design tests, and track student progress.
-                </p>
-                <ul className="text-left text-sm space-y-2 mb-6">
-                  <li className="flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-game-gold" />
-                    Full question bank management
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Target className="w-4 h-4 text-game-gold" />
-                    Flexible test creation
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Trophy className="w-4 h-4 text-game-gold" />
-                    Detailed analytics
-                  </li>
-                </ul>
-                <Link to="/auth/register?role=mentor">
-                  <Button variant="secondary" className="w-full">
-                    Start Teaching
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-
-            {/* Admin Card */}
-            <Card variant="game" className="overflow-hidden">
-              <div className="h-32 bg-gradient-to-br from-game-boss to-purple-800 flex items-center justify-center">
-                <Shield className="w-16 h-16 text-white" />
-              </div>
-              <CardContent className="p-6 text-center">
-                <h3 className="text-2xl font-bold font-game mb-2">Admin</h3>
-                <p className="text-muted-foreground mb-4">
-                  Full system control including user management, settings, and global analytics.
-                </p>
-                <ul className="text-left text-sm space-y-2 mb-6">
-                  <li className="flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-game-gold" />
-                    Complete system access
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Target className="w-4 h-4 text-game-gold" />
-                    User & role management
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Trophy className="w-4 h-4 text-game-gold" />
-                    Anti-cheat configuration
-                  </li>
-                </ul>
-                <Link to="/auth/login">
-                  <Button variant="outline" className="w-full">
-                    Admin Login
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </section>
+          
 
       {/* Footer */}
       <footer className="relative z-10 px-6 py-12 bg-sidebar text-sidebar-foreground">
@@ -273,12 +163,12 @@ export default function LandingPage() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-sidebar-primary flex items-center justify-center">
-                <span className="text-sidebar-primary-foreground font-pixel text-xs">TQ</span>
+                <span className="text-sidebar-primary-foreground font-pixel text-xs">GI</span>
               </div>
-              <span className="font-game font-bold text-lg">TestQuest</span>
+              <span className="font-game font-bold text-lg">Gamify IAS</span>
             </div>
             <p className="text-sm text-sidebar-foreground/60">
-              © 2024 TestQuest. Gamifying education, one quest at a time.
+              © 2025 Gamify IAS Academy. Gamifying education.
             </p>
             <div className="flex items-center gap-4">
               <Link to="/auth/login" className="text-sm hover:text-sidebar-primary transition-colors">

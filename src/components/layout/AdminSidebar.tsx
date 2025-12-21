@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, 
+  User,
   BookOpen, 
   FileQuestion, 
   ClipboardList, 
@@ -29,6 +30,7 @@ interface SidebarItem {
 
 const adminItems: SidebarItem[] = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/admin/dashboard' },
+  { icon: User, label: 'Profile', href: '/admin/profile' },
   { icon: Users, label: 'Users', href: '/admin/users' },
   { icon: UserCog, label: 'Roles', href: '/admin/roles' },
   { icon: BookOpen, label: 'Subjects', href: '/admin/subjects' },
@@ -36,7 +38,7 @@ const adminItems: SidebarItem[] = [
   { icon: ClipboardList, label: 'Tests', href: '/admin/tests' },
   { icon: BarChart3, label: 'Analytics', href: '/admin/analytics' },
   { icon: Shield, label: 'Anti-Cheat Logs', href: '/admin/anti-cheat-logs' },
-  { icon: Settings, label: 'Settings', href: '/admin/settings' },
+  { icon: Settings, label: 'Profile', href: '/admin/profile' },
 ];
 
 const mentorItems: SidebarItem[] = [
@@ -73,9 +75,9 @@ export function AdminSidebar({ role }: AdminSidebarProps) {
         {!collapsed && (
           <Link to={`/${role}/dashboard`} className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
-              <span className="text-sidebar-primary-foreground font-pixel text-xs">TQ</span>
+              <span className="text-sidebar-primary-foreground font-pixel text-xs">GI</span>
             </div>
-            <span className="font-game font-bold text-sidebar-foreground">TestQuest</span>
+            <span className="font-game font-bold text-sidebar-foreground">Gamify IAS</span>
           </Link>
         )}
         <Button 

@@ -40,7 +40,7 @@ const adminNavItems = [
   { icon: ClipboardList, label: 'Tests', href: '/admin/tests' },
   { icon: BarChart3, label: 'Analytics', href: '/admin/analytics' },
   { icon: AlertTriangle, label: 'Anti-Cheat Logs', href: '/admin/anti-cheat-logs' },
-  { icon: Settings, label: 'Settings', href: '/admin/settings' },
+  { icon: Settings, label: 'Profile', href: '/admin/profile' },
 ];
 
 const mentorNavItems = [
@@ -69,10 +69,10 @@ function AdminSidebarContent({ role }: AdminSidebarContentProps) {
       <div className="p-4 border-b border-sidebar-border">
         <Link to={`/${role}/dashboard`} className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-game-gold to-game-star flex items-center justify-center shadow-md shrink-0">
-            <span className="text-primary-foreground font-pixel text-xs">TQ</span>
+            <span className="text-primary-foreground font-pixel text-xs">GI</span>
           </div>
           <div>
-            <span className="font-game font-bold text-lg text-sidebar-foreground block">TestQuest</span>
+            <span className="font-game font-bold text-lg text-sidebar-foreground block">Gamify IAS</span>
             <span className="text-xs text-sidebar-foreground/60 capitalize">{role} Panel</span>
           </div>
         </Link>

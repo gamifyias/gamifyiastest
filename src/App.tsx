@@ -33,6 +33,7 @@ import AdminQuestions from "./pages/admin/AdminQuestions";
 import AdminTests from "./pages/admin/AdminTests";
 import AdminAnalytics from "./pages/admin/AdminAnalytics";
 import AdminAntiCheatLogs from "./pages/admin/AdminAntiCheatLogs";
+import AdminProfile from "./pages/admin/AdminProfile";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -82,6 +83,7 @@ const App = () => (
             <Route path="/admin/tests" element={<ProtectedRoute allowedRoles={['admin']}><AdminTests /></ProtectedRoute>} />
             <Route path="/admin/analytics" element={<ProtectedRoute allowedRoles={['admin']}><AdminAnalytics /></ProtectedRoute>} />
             <Route path="/admin/anti-cheat-logs" element={<ProtectedRoute allowedRoles={['admin']}><AdminAntiCheatLogs /></ProtectedRoute>} />
+            <Route path="/admin/profile" element={<ProtectedRoute allowedRoles={['admin']}><AdminProfile /></ProtectedRoute>} />
 
             <Route path="*" element={<NotFound />} />
           </Routes>

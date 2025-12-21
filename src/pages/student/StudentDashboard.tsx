@@ -177,14 +177,14 @@ export default function StudentDashboard() {
               Ready for your next learning quest?
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          {/* <div className="flex items-center gap-2">
             {stats.rank > 0 && <RankBadge rank={stats.rank} />}
             <StreakBadge days={stats.streak} />
-          </div>
+          </div> */}
         </div>
 
         {/* Level Progress */}
-        <Card variant="gameHighlight" className="p-6">
+        {/* <Card variant="gameHighlight" className="p-6">
           <div className="flex flex-col md:flex-row md:items-center gap-6">
             <div className="flex-1">
               <LevelProgress 
@@ -203,7 +203,7 @@ export default function StudentDashboard() {
               </Link>
             </div>
           </div>
-        </Card>
+        </Card> */}
 
         {/* Quick Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -237,15 +237,15 @@ export default function StudentDashboard() {
             </CardContent>
           </Card>
 
-          <Card variant="interactive">
+          <a href="https://contactgamifyias.web.app/" target='_blank'><Card variant="interactive">
             <CardContent className="p-4 text-center">
               <div className="w-12 h-12 mx-auto mb-2 rounded-xl bg-gradient-to-br from-game-boss to-purple-800 flex items-center justify-center">
                 <Trophy className="w-6 h-6 text-white" />
               </div>
-              <div className="text-2xl font-bold font-game">#{stats.rank || '-'}</div>
-              <div className="text-sm text-muted-foreground">Leaderboard</div>
+              <div className="text-2xl font-bold font-game">Any Issue??</div>
+              <div className="text-sm text-muted-foreground">Contact Admin</div>
             </CardContent>
-          </Card>
+          </Card></a>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-6">
@@ -338,7 +338,7 @@ export default function StudentDashboard() {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <Link to="/student/game" className="block">
             <Card variant="game" className="h-full hover:scale-105 transition-transform cursor-pointer">
               <CardContent className="p-6 text-center">
@@ -369,7 +369,7 @@ export default function StudentDashboard() {
             </Card>
           </Link>
 
-          <Link to="/student/leaderboard" className="block">
+          {/* <Link to="/student/leaderboard" className="block">
             <Card variant="game" className="h-full hover:scale-105 transition-transform cursor-pointer">
               <CardContent className="p-6 text-center">
                 <Trophy className="w-10 h-10 mx-auto mb-3 text-game-gold" />
@@ -377,7 +377,7 @@ export default function StudentDashboard() {
                 <p className="text-sm text-muted-foreground">Check Rankings</p>
               </CardContent>
             </Card>
-          </Link>
+          </Link> */}
         </div>
       </div>
     </StudentLayout>

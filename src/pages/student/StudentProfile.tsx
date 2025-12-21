@@ -179,8 +179,8 @@ export default function StudentProfile() {
         </Card>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card variant="game">
+        <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
+          {/* <Card variant="game">
             <CardContent className="p-4 text-center">
               <div className="w-12 h-12 mx-auto mb-2 rounded-xl bg-primary/20 flex items-center justify-center">
                 <Star className="w-6 h-6 text-primary" />
@@ -188,8 +188,8 @@ export default function StudentProfile() {
               <p className="text-2xl font-bold">{leaderboard?.total_xp || 0}</p>
               <p className="text-sm text-muted-foreground">Total XP</p>
             </CardContent>
-          </Card>
-          <Card variant="game">
+          </Card> */}
+          {/* <Card variant="game">
             <CardContent className="p-4 text-center">
               <div className="w-12 h-12 mx-auto mb-2 rounded-xl bg-game-gold/20 flex items-center justify-center">
                 <Trophy className="w-6 h-6 text-game-gold" />
@@ -197,7 +197,7 @@ export default function StudentProfile() {
               <p className="text-2xl font-bold">{leaderboard?.total_coins || 0}</p>
               <p className="text-sm text-muted-foreground">Coins</p>
             </CardContent>
-          </Card>
+          </Card> */}
           <Card variant="game">
             <CardContent className="p-4 text-center">
               <div className="w-12 h-12 mx-auto mb-2 rounded-xl bg-accent/20 flex items-center justify-center">
@@ -207,7 +207,7 @@ export default function StudentProfile() {
               <p className="text-sm text-muted-foreground">Tests Done</p>
             </CardContent>
           </Card>
-          <Card variant="game">
+          {/* <Card variant="game">
             <CardContent className="p-4 text-center">
               <div className="w-12 h-12 mx-auto mb-2 rounded-xl bg-destructive/20 flex items-center justify-center">
                 <Flame className="w-6 h-6 text-destructive" />
@@ -215,7 +215,7 @@ export default function StudentProfile() {
               <p className="text-2xl font-bold">{leaderboard?.current_streak || 0}</p>
               <p className="text-sm text-muted-foreground">Day Streak</p>
             </CardContent>
-          </Card>
+          </Card> */}
         </div>
 
         {/* Detailed Stats */}
