@@ -641,23 +641,23 @@ export default function AdminQuestions() {
                     <div className="flex-1">
                       <p className="text-sidebar-foreground font-medium line-clamp-2">{q.question_text}</p>
                       <div className="flex flex-wrap gap-2 mt-2">
-                        <Badge variant="outline" className="text-xs bg-primary/10">
+                        <Badge variant="outline" className="text-xs bg-primary/10 text-[white]">
                           {q.subjects?.name || 'No subject'}
                         </Badge>
-                        <Badge variant="outline" className="text-xs bg-secondary/10">
+                        <Badge variant="outline" className="text-xs bg-secondary/10 text-[white]">
                           {q.topics?.name || 'No topic'}
                         </Badge>
                         <Badge className={`text-xs ${getDifficultyColor(q.difficulty)}`}>
                           {q.difficulty}
                         </Badge>
-                        <Badge variant="outline" className="text-xs">
+                        <Badge variant="outline" className="text-xs text-[white]">
                           {getTypeLabel(q.question_type)}
                         </Badge>
-                        <Badge variant="outline" className="text-xs">
+                        <Badge variant="outline" className="text-xs text-[white]">
                           {q.marks} marks
                         </Badge>
                         {!q.is_active && (
-                          <Badge variant="destructive" className="text-xs">Inactive</Badge>
+                          <Badge variant="destructive" className="text-xs text-[white]" >Inactive</Badge>
                         )}
                       </div>
                     </div>

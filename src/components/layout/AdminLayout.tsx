@@ -32,8 +32,7 @@ import {
 
 const adminNavItems = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/admin/dashboard' },
-  { icon: Users, label: 'Users', href: '/admin/users' },
-  { icon: Shield, label: 'Roles', href: '/admin/roles' },
+  { icon: Users, label: 'User Management', href: '/admin/users' },
   { icon: BookOpen, label: 'Subjects', href: '/admin/subjects' },
   { icon: Layers, label: 'Topics', href: '/admin/topics' },
   { icon: FileQuestion, label: 'Questions', href: '/admin/questions' },

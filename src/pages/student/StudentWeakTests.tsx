@@ -345,7 +345,7 @@ export default function StudentWeakTests() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <Card variant="default">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
@@ -389,7 +389,7 @@ export default function StudentWeakTests() {
               </div>
             </CardContent>
           </Card>
-          <Card variant="default">
+          {/* <Card variant="default">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-xl bg-secondary/20 flex items-center justify-center">
@@ -403,7 +403,7 @@ export default function StudentWeakTests() {
                 </div>
               </div>
             </CardContent>
-          </Card>
+          </Card> */}
         </div>
 
         {weakTopics.length === 0 && weakQuestions.length === 0 ? (
