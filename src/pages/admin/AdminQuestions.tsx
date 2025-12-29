@@ -15,7 +15,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { BulkQuestionImport } from '@/components/admin/BulkQuestionImport';
+import { BulkQuestionImport } from '@/components/auth/admin/BulkQuestionImport';
 
 interface Question {
   id: string;

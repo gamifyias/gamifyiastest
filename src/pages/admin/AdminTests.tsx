@@ -17,7 +17,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { useLocation } from 'react-router-dom';
 import { format } from 'date-fns';
-import { TestPreview } from '@/components/admin/TestPreview';
+import { TestPreview } from '@/components/auth/admin/TestPreview';
 import {
   Plus,
   ClipboardList,
