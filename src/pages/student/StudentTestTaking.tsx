@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -23,8 +22,6 @@ import {
   Shield,
   Maximize,
   Loader2,
-  CheckCircle,
-  XCircle,
 } from 'lucide-react';
 
 interface Question {
@@ -88,7 +85,6 @@ export default function StudentTestTaking() {
 
   const {
     violations,
-    isFullscreen,
     warningMessage,
     enterFullscreen,
     exitFullscreen,
@@ -585,9 +581,11 @@ export default function StudentTestTaking() {
                     </Button>
                   </div>
 
-                  {/* Question Text */}
+                  {/* Question Text - FIX: Added whitespace-pre-wrap and leading-relaxed */}
                   <div className="mb-6">
-                    <p className="text-lg">{currentQuestion.question_text}</p>
+                    <div className="text-lg whitespace-pre-wrap leading-relaxed">
+                      {currentQuestion.question_text}
+                    </div>
                     {currentQuestion.question_image_url && (
                       <img 
                         src={currentQuestion.question_image_url} 
@@ -607,18 +605,21 @@ export default function StudentTestTaking() {
                       {currentQuestion.options.map((option, idx) => (
                         <div
                           key={option.id}
-                          className={`flex items-center space-x-3 p-4 border rounded-lg cursor-pointer transition-colors ${
+                          className={`flex items-start space-x-3 p-4 border rounded-lg cursor-pointer transition-colors ${
                             currentAnswer?.selectedOptions.includes(option.id)
                               ? 'border-primary bg-primary/5'
                               : 'hover:bg-muted/50'
                           }`}
                         >
-                          <RadioGroupItem value={option.id} id={option.id} />
-                          <Label htmlFor={option.id} className="flex-1 cursor-pointer">
+                          <RadioGroupItem value={option.id} id={option.id} className="mt-1" />
+                          <Label htmlFor={option.id} className="flex-1 cursor-pointer leading-relaxed">
                             <span className="font-medium mr-2">
                               {String.fromCharCode(65 + idx)}.
                             </span>
-                            {option.option_text}
+                            {/* FIX: Added whitespace-pre-wrap for options too */}
+                            <span className="whitespace-pre-wrap">
+                              {option.option_text}
+                            </span>
                             {option.option_image_url && (
                               <img src={option.option_image_url} alt="" className="mt-2 max-w-xs rounded" />
                             )}
@@ -631,7 +632,7 @@ export default function StudentTestTaking() {
                       {currentQuestion.options.map((option, idx) => (
                         <div
                           key={option.id}
-                          className={`flex items-center space-x-3 p-4 border rounded-lg cursor-pointer transition-colors ${
+                          className={`flex items-start space-x-3 p-4 border rounded-lg cursor-pointer transition-colors ${
                             currentAnswer?.selectedOptions.includes(option.id)
                               ? 'border-primary bg-primary/5'
                               : 'hover:bg-muted/50'
@@ -647,12 +648,16 @@ export default function StudentTestTaking() {
                           <Checkbox
                             checked={currentAnswer?.selectedOptions.includes(option.id)}
                             onCheckedChange={() => {}}
+                            className="mt-1"
                           />
-                          <Label className="flex-1 cursor-pointer">
+                          <Label className="flex-1 cursor-pointer leading-relaxed">
                             <span className="font-medium mr-2">
                               {String.fromCharCode(65 + idx)}.
                             </span>
-                            {option.option_text}
+                             {/* FIX: Added whitespace-pre-wrap for options too */}
+                            <span className="whitespace-pre-wrap">
+                              {option.option_text}
+                            </span>
                           </Label>
                         </div>
                       ))}
