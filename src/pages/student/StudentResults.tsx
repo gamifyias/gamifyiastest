@@ -22,6 +22,7 @@ import {
   SkipForward,
   Loader2,
   Download,
+  BookOpen // Added icon for explanation
 } from 'lucide-react';
 
 interface AttemptData {
@@ -78,7 +79,6 @@ export default function StudentResults() {
   const [attempt, setAttempt] = useState<AttemptData | null>(null);
   const [answers, setAnswers] = useState<AnswerData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [certificateNumber, setCertificateNumber] = useState('');
 
   useEffect(() => {
     if (attemptId) {
@@ -106,32 +106,31 @@ export default function StudentResults() {
       if (attemptError) throw attemptError;
       setAttempt(attemptData as AttemptData);
 
-      // Fetch answers with questions if show_answers is true
-      if (attemptData.tests?.show_answers) {
-        const { data: answersData } = await supabase
-          .from('student_answers')
-          .select(`
-            *,
-            questions (
-              question_text,
-              question_type,
-              difficulty,
-              marks,
-              negative_marks,
-              explanation,
-              question_options (
-                id,
-                option_text,
-                is_correct
-              )
+      // ALWAYS Fetch answers with questions (Removed the show_answers check)
+      const { data: answersData } = await supabase
+        .from('student_answers')
+        .select(`
+          *,
+          questions (
+            question_text,
+            question_type,
+            difficulty,
+            marks,
+            negative_marks,
+            explanation,
+            question_options (
+              id,
+              option_text,
+              is_correct
             )
-          `)
-          .eq('attempt_id', attemptId);
+          )
+        `)
+        .eq('attempt_id', attemptId);
 
-        if (answersData) {
-          setAnswers(answersData as AnswerData[]);
-        }
+      if (answersData) {
+        setAnswers(answersData as AnswerData[]);
       }
+      
     } catch (error) {
       console.error('Error fetching results:', error);
     } finally {
@@ -291,13 +290,13 @@ export default function StudentResults() {
           </CardContent>
         </Card>
 
-        {/* Answer Review */}
-        {attempt.tests.show_answers && answers.length > 0 && (
+        {/* Answer Review - Always Visible Now */}
+        {answers.length > 0 && (
           <Card variant="default">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Target className="w-5 h-5" />
-                Answer Review
+                Answer Review & Explanations
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -350,10 +349,16 @@ export default function StudentResults() {
                     })}
                   </div>
 
+                  {/* Explanation Section */}
                   {answer.questions.explanation && (
-                    <div className="mt-3 ml-10 p-3 bg-secondary/10 rounded-lg">
-                      <p className="text-sm font-medium mb-1">Explanation:</p>
-                      <p className="text-sm text-muted-foreground">{answer.questions.explanation}</p>
+                    <div className="mt-3 ml-10 p-4 bg-primary/5 rounded-lg border border-primary/10">
+                      <div className="flex items-center gap-2 mb-2 text-primary font-semibold">
+                        <BookOpen className="w-4 h-4" />
+                        Explanation:
+                      </div>
+                      <p className="text-sm text-muted-foreground leading-relaxed">
+                        {answer.questions.explanation}
+                      </p>
                     </div>
                   )}
                 </div>

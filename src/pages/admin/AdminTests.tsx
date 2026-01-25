@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AdminLayout } from '@/components/layout/AdminLayout';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -21,24 +21,24 @@ import { TestPreview } from '@/components/auth/admin/TestPreview';
 import {
   Plus,
   ClipboardList,
-  Settings,
   Users,
   Calendar,
   Clock,
   Target,
   Shield,
   Search,
-  Edit,
   Trash2,
   Eye,
   Loader2,
   CheckCircle,
   XCircle,
-  AlertTriangle,
   Filter,
   UserCircle,
   ShieldCheck,
+  Edit, // Edit Icon
 } from 'lucide-react';
+
+// --- Interfaces ---
 
 interface Test {
   id: string;
@@ -54,6 +54,26 @@ interface Test {
   created_at: string;
   subject_id: string | null;
   subjects?: { name: string } | null;
+  // Additional fields for Edit mapping
+  max_attempts?: number;
+  shuffle_questions?: boolean;
+  shuffle_options?: boolean;
+  show_results?: boolean;
+  show_answers?: boolean;
+  allow_navigation?: boolean;
+  allow_review?: boolean;
+  question_by_question?: boolean;
+  auto_submit?: boolean;
+  anti_cheat_enabled?: boolean;
+  fullscreen_required?: boolean;
+  tab_switch_limit?: number;
+  watermark_enabled?: boolean;
+  is_anytime?: boolean;
+  start_time?: string;
+  end_time?: string;
+  easy_percentage?: number;
+  medium_percentage?: number;
+  hard_percentage?: number;
 }
 
 interface Question {
@@ -90,6 +110,7 @@ export default function AdminTests() {
   const role = location.pathname.startsWith('/mentor') ? 'mentor' : 'admin';
   const { user } = useAuth();
   
+  // --- State ---
   const [tests, setTests] = useState<Test[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -98,9 +119,12 @@ export default function AdminTests() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
-  // New Filter State
+  // Filters
   const [testSourceFilter, setTestSourceFilter] = useState<string>('all');
+  const [questionFilterTopic, setQuestionFilterTopic] = useState<string>('all');
+  const [filteredTopicsForQuestions, setFilteredTopicsForQuestions] = useState<Topic[]>([]);
   
+  // Dialogs & Selection
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -108,8 +132,10 @@ export default function AdminTests() {
   const [selectedTest, setSelectedTest] = useState<Test | null>(null);
   const [selectedQuestions, setSelectedQuestions] = useState<string[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
-  const [questionFilterTopic, setQuestionFilterTopic] = useState<string>('all');
-  const [filteredTopicsForQuestions, setFilteredTopicsForQuestions] = useState<Topic[]>([]);
+
+  // Edit Mode State
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingTestId, setEditingTestId] = useState<string | null>(null);
   
   const [formData, setFormData] = useState({
     title: '',
@@ -141,6 +167,7 @@ export default function AdminTests() {
     end_time: '',
   });
 
+  // --- Effects ---
   useEffect(() => {
     fetchData();
   }, []);
@@ -154,6 +181,7 @@ export default function AdminTests() {
     setQuestionFilterTopic('all');
   }, [formData.subject_id, topics]);
 
+  // --- Functions ---
   const fetchData = async () => {
     try {
       const [testsRes, questionsRes, subjectsRes, topicsRes, studentsRes] = await Promise.all([
@@ -187,6 +215,157 @@ export default function AdminTests() {
     }
   };
 
+  const resetForm = () => {
+    setIsEditMode(false);
+    setEditingTestId(null);
+    setFormData({
+      title: '',
+      description: '',
+      test_type: 'mixed',
+      duration_minutes: 60,
+      total_marks: 100,
+      pass_marks: 40,
+      subject_id: '',
+      max_attempts: 1,
+      shuffle_questions: true,
+      shuffle_options: true,
+      show_results: true,
+      show_answers: false,
+      allow_navigation: true,
+      allow_review: true,
+      question_by_question: false,
+      auto_submit: true,
+      anti_cheat_enabled: true,
+      fullscreen_required: true,
+      tab_switch_limit: 3,
+      watermark_enabled: true,
+      easy_percentage: 30,
+      medium_percentage: 50,
+      hard_percentage: 20,
+      is_public: false,
+      is_anytime: true,
+      start_time: '',
+      end_time: '',
+    });
+    setSelectedQuestions([]);
+  };
+
+  // --- Handler: Edit Test (Populate Form) ---
+  const handleEditTest = async (test: Test) => {
+    setIsEditMode(true);
+    setEditingTestId(test.id);
+
+    // Format dates for input fields (YYYY-MM-DDTHH:mm)
+    const formatDateTime = (dateStr?: string) => {
+      if (!dateStr) return '';
+      const date = new Date(dateStr);
+      return date.toISOString().slice(0, 16); 
+    };
+
+    setFormData({
+      title: test.title,
+      description: test.description || '',
+      test_type: test.test_type,
+      duration_minutes: test.duration_minutes,
+      total_marks: test.total_marks,
+      pass_marks: test.pass_marks,
+      subject_id: test.subject_id || '',
+      max_attempts: test.max_attempts || 1,
+      shuffle_questions: test.shuffle_questions ?? true,
+      shuffle_options: test.shuffle_options ?? true,
+      show_results: test.show_results ?? true,
+      show_answers: test.show_answers ?? false,
+      allow_navigation: test.allow_navigation ?? true,
+      allow_review: test.allow_review ?? true,
+      question_by_question: test.question_by_question ?? false,
+      auto_submit: test.auto_submit ?? true,
+      anti_cheat_enabled: test.anti_cheat_enabled ?? true,
+      fullscreen_required: test.fullscreen_required ?? true,
+      tab_switch_limit: test.tab_switch_limit ?? 3,
+      watermark_enabled: test.watermark_enabled ?? true,
+      easy_percentage: test.easy_percentage ?? 30,
+      medium_percentage: test.medium_percentage ?? 50,
+      hard_percentage: test.hard_percentage ?? 20,
+      is_public: test.is_public,
+      is_anytime: test.is_anytime ?? true,
+      start_time: formatDateTime(test.start_time),
+      end_time: formatDateTime(test.end_time),
+    });
+
+    // Fetch existing questions
+    const { data: existingQuestions } = await supabase
+      .from('test_questions')
+      .select('question_id')
+      .eq('test_id', test.id);
+
+    if (existingQuestions) {
+      setSelectedQuestions(existingQuestions.map((q: any) => q.question_id));
+    }
+
+    setIsCreateDialogOpen(true);
+  };
+
+  // --- Handler: Update Existing Test ---
+  const handleUpdateTest = async () => {
+    if (!editingTestId) return;
+    if (!formData.title || selectedQuestions.length === 0) {
+      toast.error('Please fill in the title and select at least one question');
+      return;
+    }
+
+    try {
+      const totalMarks = selectedQuestions.reduce((sum, qId) => {
+        const q = questions.find(q => q.id === qId);
+        return sum + (q?.marks || 0);
+      }, 0);
+
+      // 1. Update Test Details
+      const { error: updateError } = await supabase
+        .from('tests')
+        .update({
+          ...formData,
+          // FIX: Convert empty string to null for UUID field
+          subject_id: formData.subject_id === "" ? null : formData.subject_id, 
+          total_questions: selectedQuestions.length,
+          total_marks: totalMarks,
+          start_time: formData.start_time || null,
+          end_time: formData.end_time || null,
+        })
+        .eq('id', editingTestId);
+
+      if (updateError) throw updateError;
+
+      // 2. Update Questions (Delete old -> Insert new)
+      const { error: deleteError } = await supabase
+        .from('test_questions')
+        .delete()
+        .eq('test_id', editingTestId);
+      
+      if (deleteError) throw deleteError;
+
+      const testQuestions = selectedQuestions.map((qId, index) => ({
+        test_id: editingTestId,
+        question_id: qId,
+        sort_order: index,
+      }));
+
+      const { error: insertError } = await supabase
+        .from('test_questions')
+        .insert(testQuestions);
+
+      if (insertError) throw insertError;
+
+      toast.success('Test updated successfully');
+      setIsCreateDialogOpen(false);
+      resetForm();
+      fetchData();
+    } catch (error: any) {
+      console.error('Error updating test:', error);
+      toast.error(error.message || 'Failed to update test');
+    }
+  };
+
+  // --- Handler: Create New Test ---
   const handleCreateTest = async () => {
     if (!formData.title || selectedQuestions.length === 0) {
       toast.error('Please fill in the title and select at least one question');
@@ -203,6 +382,8 @@ export default function AdminTests() {
         .from('tests')
         .insert({
           ...formData,
+          // FIX: Convert empty string to null for UUID field
+          subject_id: formData.subject_id === "" ? null : formData.subject_id,
           total_questions: selectedQuestions.length,
           total_marks: totalMarks,
           created_by: user?.id,
@@ -298,44 +479,9 @@ export default function AdminTests() {
     }
   };
 
-  const resetForm = () => {
-    setFormData({
-      title: '',
-      description: '',
-      test_type: 'mixed',
-      duration_minutes: 60,
-      total_marks: 100,
-      pass_marks: 40,
-      subject_id: '',
-      max_attempts: 1,
-      shuffle_questions: true,
-      shuffle_options: true,
-      show_results: true,
-      show_answers: false,
-      allow_navigation: true,
-      allow_review: true,
-      question_by_question: false,
-      auto_submit: true,
-      anti_cheat_enabled: true,
-      fullscreen_required: true,
-      tab_switch_limit: 3,
-      watermark_enabled: true,
-      easy_percentage: 30,
-      medium_percentage: 50,
-      hard_percentage: 20,
-      is_public: false,
-      is_anytime: true,
-      start_time: '',
-      end_time: '',
-    });
-    setSelectedQuestions([]);
-  };
-
-  // UPDATED FILTERING LOGIC
+  // --- Filtering ---
   const filteredTests = tests.filter(test => {
     const matchesSearch = test.title.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    // Check if generated by student (Weak Area Test)
     const isStudentGenerated = test.test_type === 'weak_areas' || test.title.includes('Weak Areas Test');
     
     let matchesSource = true;
@@ -359,6 +505,7 @@ export default function AdminTests() {
     setIsPreviewOpen(true);
   };
 
+  // --- Loading State ---
   if (isLoading) {
     return (
       <AdminLayout role={role}>
@@ -369,9 +516,11 @@ export default function AdminTests() {
     );
   }
 
+  // --- JSX Render ---
   return (
     <AdminLayout role={role}>
       <div className="p-6 space-y-6">
+        
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between gap-4">
           <div>
@@ -381,6 +530,7 @@ export default function AdminTests() {
             </h1>
             <p className="text-sidebar-foreground/70 mt-1">Create, manage, and assign tests</p>
           </div>
+          
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="admin" onClick={() => resetForm()}>
@@ -390,7 +540,7 @@ export default function AdminTests() {
             </DialogTrigger>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
               <DialogHeader>
-                <DialogTitle>Create New Test</DialogTitle>
+                <DialogTitle>{isEditMode ? 'Edit Test' : 'Create New Test'}</DialogTitle>
               </DialogHeader>
               <ScrollArea className="max-h-[calc(90vh-120px)] pr-4">
                 <Tabs defaultValue="basic" className="w-full">
@@ -401,6 +551,7 @@ export default function AdminTests() {
                     <TabsTrigger value="anticheat">Anti-Cheat</TabsTrigger>
                   </TabsList>
 
+                  {/* 1. Basic Info Tab */}
                   <TabsContent value="basic" className="space-y-4 mt-4">
                     <div className="grid gap-4">
                       <div>
@@ -513,6 +664,7 @@ export default function AdminTests() {
                     </div>
                   </TabsContent>
 
+                  {/* 2. Questions Tab */}
                   <TabsContent value="questions" className="space-y-4 mt-4">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <p className="text-sm text-muted-foreground">
@@ -605,6 +757,7 @@ export default function AdminTests() {
                     </ScrollArea>
                   </TabsContent>
 
+                  {/* 3. Settings Tab */}
                   <TabsContent value="settings" className="space-y-4 mt-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="flex items-center justify-between p-3 border rounded-lg">
@@ -666,6 +819,7 @@ export default function AdminTests() {
                     </div>
                   </TabsContent>
 
+                  {/* 4. Anti-Cheat Tab */}
                   <TabsContent value="anticheat" className="space-y-4 mt-4">
                     <Card variant="admin">
                       <CardHeader>
@@ -723,12 +877,14 @@ export default function AdminTests() {
                     </Card>
                   </TabsContent>
                 </Tabs>
+
+                {/* Footer Buttons */}
                 <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
                   <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button variant="admin" onClick={handleCreateTest}>
-                    Create Test
+                  <Button variant="admin" onClick={isEditMode ? handleUpdateTest : handleCreateTest}>
+                    {isEditMode ? 'Update Test' : 'Create Test'}
                   </Button>
                 </div>
               </ScrollArea>
@@ -736,7 +892,7 @@ export default function AdminTests() {
           </Dialog>
         </div>
 
-        {/* Search and NEW SOURCE FILTER */}
+        {/* Search and Filters */}
         <div className="flex flex-col md:flex-row gap-4">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -790,7 +946,6 @@ export default function AdminTests() {
                             {test.is_active ? 'Active' : 'Inactive'}
                           </Badge>
                           
-                          {/* Visual indicator for Source */}
                           {isStudentGen ? (
                             <Badge variant="outline" className="border-amber-500 text-amber-600 bg-amber-50 gap-1">
                               <UserCircle size={12} /> Student Generated
@@ -827,6 +982,19 @@ export default function AdminTests() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
+                        {/* EDIT BUTTON */}
+                        {role === 'admin' && (
+                          <Button
+                            className="text-[black]"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEditTest(test)}
+                          >
+                            <Edit size={16} />
+                            Edit
+                          </Button>
+                        )}
+                        
                         <Button
                           className="text-[black]"
                           variant="outline"
@@ -875,68 +1043,68 @@ export default function AdminTests() {
 
         {/* Assign Dialog */}
         <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Assign Test to Students</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Assigning: <strong>{selectedTest?.title}</strong>
-            </p>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Assign Test to Students</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Assigning: <strong>{selectedTest?.title}</strong>
+              </p>
 
-            {/* Select All Toggle */}
-            <div className="flex items-center gap-3 px-4 py-2 bg-muted/50 rounded-lg border">
-              <Checkbox
-                id="select-all"
-                checked={selectedStudents.length === students.length && students.length > 0}
-                onCheckedChange={(checked) => {
-                  if (checked) {
-                    setSelectedStudents(students.map((s) => s.user_id));
-                  } else {
-                    setSelectedStudents([]);
-                  }
-                }}
-              />
-              <label htmlFor="select-all" className="text-sm font-semibold cursor-pointer">
-                Select All Students ({students.length})
-              </label>
-            </div>
+              <div className="flex items-center gap-3 px-4 py-2 bg-muted/50 rounded-lg border">
+                <Checkbox
+                  id="select-all"
+                  checked={selectedStudents.length === students.length && students.length > 0}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setSelectedStudents(students.map((s) => s.user_id));
+                    } else {
+                      setSelectedStudents([]);
+                    }
+                  }}
+                />
+                <label htmlFor="select-all" className="text-sm font-semibold cursor-pointer">
+                  Select All Students ({students.length})
+                </label>
+              </div>
 
-            <ScrollArea className="h-[300px] border rounded-lg p-4">
-              {students.map((student) => (
-                <div
-                  key={student.id}
-                  className="flex items-center gap-3 p-3 border-b last:border-0"
-                >
-                  <Checkbox
-                    checked={selectedStudents.includes(student.user_id)}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        setSelectedStudents([...selectedStudents, student.user_id]);
-                      } else {
-                        setSelectedStudents(selectedStudents.filter((id) => id !== student.user_id));
-                      }
-                    }}
-                  />
-                  <div>
-                    <p className="font-medium">{student.full_name}</p>
-                    <p className="text-sm text-muted-foreground">{student.email}</p>
+              <ScrollArea className="h-[300px] border rounded-lg p-4">
+                {students.map((student) => (
+                  <div
+                    key={student.id}
+                    className="flex items-center gap-3 p-3 border-b last:border-0"
+                  >
+                    <Checkbox
+                      checked={selectedStudents.includes(student.user_id)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedStudents([...selectedStudents, student.user_id]);
+                        } else {
+                          setSelectedStudents(selectedStudents.filter((id) => id !== student.user_id));
+                        }
+                      }}
+                    />
+                    <div>
+                      <p className="font-medium">{student.full_name}</p>
+                      <p className="text-sm text-muted-foreground">{student.email}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </ScrollArea>
+                ))}
+              </ScrollArea>
 
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsAssignDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button variant="admin" onClick={handleAssignTest} disabled={selectedStudents.length === 0}>
-                Assign ({selectedStudents.length})
-              </Button>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setIsAssignDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button variant="admin" onClick={handleAssignTest} disabled={selectedStudents.length === 0}>
+                  Assign ({selectedStudents.length})
+                </Button>
+              </div>
             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+          </DialogContent>
+        </Dialog>
+        
         {/* Test Preview */}
         <TestPreview 
           testId={previewTestId} 
@@ -946,4 +1114,4 @@ export default function AdminTests() {
       </div>
     </AdminLayout>
   );
-} 
+}

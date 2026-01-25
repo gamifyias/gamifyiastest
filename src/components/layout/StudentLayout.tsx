@@ -34,7 +34,7 @@ import {
 
 const navItems = [
   { icon: Home, label: 'Dashboard', href: '/student/dashboard' },
-  { icon: Gamepad2, label: 'Game World', href: '/student/game' },
+  // { icon: Gamepad2, label: 'Game World', href: '/student/game' },
   { icon: ClipboardList, label: 'My Tests', href: '/student/tests' },
   { icon: Target, label: 'Weak Areas', href: '/student/weak-tests' },
   // { icon: Trophy, label: 'Leaderboard', href: '/student/leaderboard' },

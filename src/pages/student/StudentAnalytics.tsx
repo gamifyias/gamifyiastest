@@ -13,12 +13,9 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
   LineChart,
   Line,
-  Legend,
+  Cell,
 } from 'recharts';
 import {
   TrendingUp,
@@ -27,15 +24,24 @@ import {
   Award,
   AlertTriangle,
   CheckCircle,
-  XCircle,
   Loader2,
   BookOpen,
   Brain,
+  Library
 } from 'lucide-react';
+
+// --- Interfaces ---
 
 interface TopicPerformance {
   topic_id: string;
   topic_name: string;
+  subject_name: string;
+  total_questions: number;
+  correct_answers: number;
+  accuracy: number;
+}
+
+interface SubjectPerformance {
   subject_name: string;
   total_questions: number;
   correct_answers: number;
@@ -58,11 +64,16 @@ interface TestHistory {
 export default function StudentAnalytics() {
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Stats
   const [totalTests, setTotalTests] = useState(0);
   const [passedTests, setPassedTests] = useState(0);
   const [averageScore, setAverageScore] = useState(0);
   const [totalTime, setTotalTime] = useState(0);
+  
+  // Data for Charts
   const [topicPerformance, setTopicPerformance] = useState<TopicPerformance[]>([]);
+  const [subjectPerformance, setSubjectPerformance] = useState<SubjectPerformance[]>([]);
   const [difficultyPerformance, setDifficultyPerformance] = useState<DifficultyPerformance[]>([]);
   const [testHistory, setTestHistory] = useState<TestHistory[]>([]);
   const [weakTopics, setWeakTopics] = useState<string[]>([]);
@@ -75,7 +86,7 @@ export default function StudentAnalytics() {
 
   const fetchAnalytics = async () => {
     try {
-      // Fetch test attempts
+      // 1. Fetch test attempts (for History & High-level stats)
       const { data: attempts } = await supabase
         .from('student_test_attempts')
         .select(`
@@ -92,16 +103,16 @@ export default function StudentAnalytics() {
         setAverageScore(attempts.reduce((sum, a) => sum + (a.percentage || 0), 0) / attempts.length);
         setTotalTime(attempts.reduce((sum, a) => sum + (a.time_taken_seconds || 0), 0));
 
-        // Test history for chart
+        // Format Date-wise History for Line Chart
         const history = attempts.slice(0, 10).map(a => ({
-          date: new Date(a.submitted_at || a.created_at).toLocaleDateString(),
+          date: new Date(a.submitted_at || a.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
           score: Math.round(a.percentage || 0),
           test_title: a.tests?.title || 'Unknown',
         })).reverse();
         setTestHistory(history);
       }
 
-      // Fetch answers with question details for topic-wise analysis
+      // 2. Fetch detailed answers (for Subject, Topic, & Difficulty analysis)
       const attemptIds = attempts?.map(a => a.id) || [];
       const { data: answersData } = await supabase
         .from('student_answers')
@@ -122,8 +133,10 @@ export default function StudentAnalytics() {
         .in('attempt_id', attemptIds);
 
       if (answersData && answersData.length > 0) {
-        // Calculate topic performance
+        
+        // Maps to aggregate data
         const topicMap: Record<string, { correct: number; total: number; name: string; subject: string }> = {};
+        const subjectMap: Record<string, { correct: number; total: number }> = {};
         const difficultyMap: Record<string, { correct: number; total: number }> = {
           easy: { correct: 0, total: 0 },
           medium: { correct: 0, total: 0 },
@@ -134,8 +147,10 @@ export default function StudentAnalytics() {
           const question = answer.questions as any;
           if (!question) return;
 
+          // --- Topic & Subject Aggregation ---
           const topic = question.topics;
           if (topic) {
+            // Topic Logic
             if (!topicMap[topic.id]) {
               topicMap[topic.id] = {
                 correct: 0,
@@ -146,8 +161,17 @@ export default function StudentAnalytics() {
             }
             topicMap[topic.id].total++;
             if (answer.is_correct) topicMap[topic.id].correct++;
+
+            // Subject Logic 
+            const subjectName = topic.subjects?.name || 'Unknown';
+            if (!subjectMap[subjectName]) {
+              subjectMap[subjectName] = { correct: 0, total: 0 };
+            }
+            subjectMap[subjectName].total++;
+            if (answer.is_correct) subjectMap[subjectName].correct++;
           }
 
+          // --- Difficulty Aggregation ---
           const difficulty = question.difficulty?.toLowerCase() || 'medium';
           if (difficultyMap[difficulty]) {
             difficultyMap[difficulty].total++;
@@ -155,7 +179,9 @@ export default function StudentAnalytics() {
           }
         });
 
-        // Convert to arrays
+        // 3. Process Maps into Arrays for Charts
+
+        // Topics
         const topicPerf = Object.entries(topicMap).map(([id, data]) => ({
           topic_id: id,
           topic_name: data.name,
@@ -163,11 +189,22 @@ export default function StudentAnalytics() {
           total_questions: data.total,
           correct_answers: data.correct,
           accuracy: data.total > 0 ? Math.round((data.correct / data.total) * 100) : 0,
-        })).sort((a, b) => a.accuracy - b.accuracy);
+        })).sort((a, b) => a.accuracy - b.accuracy); // Sort by lowest accuracy first
 
         setTopicPerformance(topicPerf);
         setWeakTopics(topicPerf.filter(t => t.accuracy < 50).map(t => t.topic_name).slice(0, 5));
 
+        // Subjects
+        const subjectPerf = Object.entries(subjectMap).map(([name, data]) => ({
+          subject_name: name,
+          total_questions: data.total,
+          correct_answers: data.correct,
+          accuracy: data.total > 0 ? Math.round((data.correct / data.total) * 100) : 0,
+        })).sort((a, b) => b.accuracy - a.accuracy); // Sort by highest accuracy
+
+        setSubjectPerformance(subjectPerf);
+
+        // Difficulty
         const diffPerf = Object.entries(difficultyMap).map(([difficulty, data]) => ({
           difficulty: difficulty.charAt(0).toUpperCase() + difficulty.slice(1),
           total: data.total,
@@ -183,7 +220,8 @@ export default function StudentAnalytics() {
     }
   };
 
-  const COLORS = ['hsl(142, 70%, 45%)', 'hsl(45, 100%, 51%)', 'hsl(0, 75%, 55%)'];
+  // Color palette for charts
+  const BAR_COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff8042', '#0088FE', '#00C49F'];
 
   if (isLoading) {
     return (
@@ -265,19 +303,20 @@ export default function StudentAnalytics() {
           </Card>
         </div>
 
-        {/* Charts Row */}
+        {/* --- CHARTS ROW 1: Date Trends & Subject Performance --- */}
         <div className="grid lg:grid-cols-2 gap-6">
-          {/* Score Trend */}
+          
+          {/* 1. Score Trend (Date-wise) */}
           <Card variant="default">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <TrendingUp className="w-5 h-5" />
-                Score Trend
+                Score Trend (Last 10 Tests)
               </CardTitle>
             </CardHeader>
             <CardContent>
               {testHistory.length > 0 ? (
-                <ResponsiveContainer width="100%" height={250}>
+                <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={testHistory}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} />
@@ -292,6 +331,7 @@ export default function StudentAnalytics() {
                     <Line
                       type="monotone"
                       dataKey="score"
+                      name="Score (%)"
                       stroke="hsl(var(--primary))"
                       strokeWidth={2}
                       dot={{ fill: 'hsl(var(--primary))' }}
@@ -299,19 +339,68 @@ export default function StudentAnalytics() {
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-[250px] flex items-center justify-center text-muted-foreground">
+                <div className="h-[300px] flex items-center justify-center text-muted-foreground">
                   No test data available
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Difficulty Distribution */}
+          {/* 2. Subject-wise Performance (NEW) */}
           <Card variant="default">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
+                <Library className="w-5 h-5" />
+                Performance by Subject
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {subjectPerformance.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={subjectPerformance} layout="vertical" margin={{ left: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+                    <XAxis type="number" domain={[0, 100]} stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                    <YAxis 
+                      dataKey="subject_name" 
+                      type="category" 
+                      width={100} 
+                      stroke="hsl(var(--foreground))" 
+                      fontSize={12} 
+                      tick={{ fill: 'hsl(var(--foreground))' }}
+                    />
+                    <Tooltip
+                      cursor={{ fill: 'transparent' }}
+                      contentStyle={{
+                        background: 'hsl(var(--card))',
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px',
+                      }}
+                    />
+                    <Bar dataKey="accuracy" name="Accuracy (%)" radius={[0, 4, 4, 0]} barSize={32}>
+                      {subjectPerformance.map((entry, index) => (
+                         <Cell key={`cell-${index}`} fill={BAR_COLORS[index % BAR_COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                  Complete tests to see subject analysis
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* --- CHARTS ROW 2: Difficulty & Detailed Topics --- */}
+        <div className="grid lg:grid-cols-3 gap-6">
+          
+          {/* 3. Difficulty Distribution */}
+          <Card variant="default" className="lg:col-span-1">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
                 <Brain className="w-5 h-5" />
-                Performance by Difficulty
+                Difficulty Analysis
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -328,64 +417,66 @@ export default function StudentAnalytics() {
                         borderRadius: '8px',
                       }}
                     />
-                    <Bar dataKey="accuracy" fill="hsl(var(--secondary))" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="accuracy" name="Accuracy (%)" fill="hsl(var(--secondary))" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
                 <div className="h-[250px] flex items-center justify-center text-muted-foreground">
-                  No difficulty data available
+                  No data available
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* 4. Topic Performance List */}
+          <Card variant="default" className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <BookOpen className="w-5 h-5" />
+                Detailed Topic Performance
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {topicPerformance.length > 0 ? (
+                <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
+                  {topicPerformance.map(topic => (
+                    <div key={topic.topic_id} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{topic.topic_name}</span>
+                          <Badge variant="outline" className="text-xs">{topic.subject_name}</Badge>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            {topic.correct_answers}/{topic.total_questions} correct
+                          </span>
+                          <span className={`font-bold text-sm ${
+                            topic.accuracy >= 70 ? 'text-accent' : 
+                            topic.accuracy >= 50 ? 'text-primary' : 'text-destructive'
+                          }`}>
+                            {topic.accuracy}%
+                          </span>
+                        </div>
+                      </div>
+                      <Progress 
+                        value={topic.accuracy} 
+                        className="h-2"
+                        // You can dynamically color the indicator via CSS/Tailwind if your Progress component supports it, 
+                        // typically handled by the 'value' prop logic in standard shadcn.
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground h-[250px] flex items-center justify-center">
+                  Complete some tests to see topic-wise performance
                 </div>
               )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Topic Performance */}
-        <Card variant="default">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <BookOpen className="w-5 h-5" />
-              Topic-wise Performance
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {topicPerformance.length > 0 ? (
-              <div className="space-y-4">
-                {topicPerformance.map(topic => (
-                  <div key={topic.topic_id} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{topic.topic_name}</span>
-                        <Badge variant="outline" className="text-xs">{topic.subject_name}</Badge>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">
-                          {topic.correct_answers}/{topic.total_questions}
-                        </span>
-                        <span className={`font-bold ${
-                          topic.accuracy >= 70 ? 'text-accent' : 
-                          topic.accuracy >= 50 ? 'text-primary' : 'text-destructive'
-                        }`}>
-                          {topic.accuracy}%
-                        </span>
-                      </div>
-                    </div>
-                    <Progress 
-                      value={topic.accuracy} 
-                      className="h-2"
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                Complete some tests to see topic-wise performance
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Weak Areas */}
+        {/* Weak Areas Alert */}
         {weakTopics.length > 0 && (
           <Card variant="gameHighlight">
             <CardHeader>
