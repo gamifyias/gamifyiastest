@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
@@ -35,7 +35,8 @@ import {
   Filter,
   UserCircle,
   ShieldCheck,
-  Edit, // Edit Icon
+  Edit,
+  Layers, // Icon for Bulk Assign
 } from 'lucide-react';
 
 // --- Interfaces ---
@@ -127,7 +128,9 @@ export default function AdminTests() {
   // Dialogs & Selection
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
+  const [isBulkAssignDialogOpen, setIsBulkAssignDialogOpen] = useState(false); // New state for bulk assign
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  
   const [previewTestId, setPreviewTestId] = useState<string>('');
   const [selectedTest, setSelectedTest] = useState<Test | null>(null);
   const [selectedQuestions, setSelectedQuestions] = useState<string[]>([]);
@@ -255,7 +258,6 @@ export default function AdminTests() {
     setIsEditMode(true);
     setEditingTestId(test.id);
 
-    // Format dates for input fields (YYYY-MM-DDTHH:mm)
     const formatDateTime = (dateStr?: string) => {
       if (!dateStr) return '';
       const date = new Date(dateStr);
@@ -292,7 +294,6 @@ export default function AdminTests() {
       end_time: formatDateTime(test.end_time),
     });
 
-    // Fetch existing questions
     const { data: existingQuestions } = await supabase
       .from('test_questions')
       .select('question_id')
@@ -319,12 +320,10 @@ export default function AdminTests() {
         return sum + (q?.marks || 0);
       }, 0);
 
-      // 1. Update Test Details
       const { error: updateError } = await supabase
         .from('tests')
         .update({
           ...formData,
-          // FIX: Convert empty string to null for UUID field
           subject_id: formData.subject_id === "" ? null : formData.subject_id, 
           total_questions: selectedQuestions.length,
           total_marks: totalMarks,
@@ -335,7 +334,6 @@ export default function AdminTests() {
 
       if (updateError) throw updateError;
 
-      // 2. Update Questions (Delete old -> Insert new)
       const { error: deleteError } = await supabase
         .from('test_questions')
         .delete()
@@ -382,7 +380,6 @@ export default function AdminTests() {
         .from('tests')
         .insert({
           ...formData,
-          // FIX: Convert empty string to null for UUID field
           subject_id: formData.subject_id === "" ? null : formData.subject_id,
           total_questions: selectedQuestions.length,
           total_marks: totalMarks,
@@ -417,6 +414,7 @@ export default function AdminTests() {
     }
   };
 
+  // --- Handler: Single Test Assignment ---
   const handleAssignTest = async () => {
     if (!selectedTest || selectedStudents.length === 0) {
       toast.error('Please select students to assign');
@@ -424,22 +422,20 @@ export default function AdminTests() {
     }
 
     try {
-      for (const studentUserId of selectedStudents) {
-        await supabase
-          .from('test_assignments')
-          .delete()
-          .eq('test_id', selectedTest.id)
-          .eq('user_id', studentUserId);
+      // Use upsert or delete-then-insert. Upsert is safer for "Assign" semantics.
+      const assignments = selectedStudents.map(studentUserId => ({
+        test_id: selectedTest.id,
+        user_id: studentUserId,
+        assigned_by: user?.id,
+        is_completed: false,
+      }));
 
-        await supabase
-          .from('test_assignments')
-          .insert({
-            test_id: selectedTest.id,
-            user_id: studentUserId,
-            assigned_by: user?.id,
-            is_completed: false,
-          });
-      }
+      // We perform upsert based on (test_id, user_id) unique constraint usually
+      const { error } = await supabase
+        .from('test_assignments')
+        .upsert(assignments, { onConflict: 'test_id,user_id' });
+
+      if (error) throw error;
 
       toast.success(`Test assigned to ${selectedStudents.length} student(s)`);
       setIsAssignDialogOpen(false);
@@ -448,6 +444,58 @@ export default function AdminTests() {
     } catch (error: any) {
       console.error('Error assigning test:', error);
       toast.error(error.message || 'Failed to assign test');
+    }
+  };
+
+  // --- Handler: Bulk Assign Tests ---
+  const handleBulkAssignTests = async () => {
+    if (selectedStudents.length === 0) {
+      toast.error('Please select at least one student.');
+      return;
+    }
+
+    // Filter for Active Admin Tests (Excluding weak areas)
+    const adminTests = tests.filter(test => {
+      const isStudentGenerated = test.test_type === 'weak_areas' || test.title.includes('Weak Areas Test');
+      return test.is_active && !isStudentGenerated;
+    });
+
+    if (adminTests.length === 0) {
+      toast.error('No active admin tests found to assign.');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const assignments = [];
+
+      // Create an assignment entry for every combination of student and active admin test
+      for (const studentId of selectedStudents) {
+        for (const test of adminTests) {
+          assignments.push({
+            test_id: test.id,
+            user_id: studentId,
+            assigned_by: user?.id,
+            is_completed: false,
+          });
+        }
+      }
+
+      // Bulk upsert to avoid duplicate key errors if some are already assigned
+      const { error } = await supabase
+        .from('test_assignments')
+        .upsert(assignments, { onConflict: 'test_id,user_id' });
+
+      if (error) throw error;
+
+      toast.success(`Successfully assigned ${adminTests.length} tests to ${selectedStudents.length} student(s).`);
+      setIsBulkAssignDialogOpen(false);
+      setSelectedStudents([]);
+    } catch (error: any) {
+      console.error('Error bulk assigning tests:', error);
+      toast.error(error.message || 'Failed to bulk assign tests');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -531,365 +579,379 @@ export default function AdminTests() {
             <p className="text-sidebar-foreground/70 mt-1">Create, manage, and assign tests</p>
           </div>
           
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="admin" onClick={() => resetForm()}>
-                <Plus size={18} />
-                Create Test
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
-              <DialogHeader>
-                <DialogTitle>{isEditMode ? 'Edit Test' : 'Create New Test'}</DialogTitle>
-              </DialogHeader>
-              <ScrollArea className="max-h-[calc(90vh-120px)] pr-4">
-                <Tabs defaultValue="basic" className="w-full">
-                  <TabsList className="grid w-full grid-cols-4">
-                    <TabsTrigger value="basic">Basic Info</TabsTrigger>
-                    <TabsTrigger value="questions">Questions</TabsTrigger>
-                    <TabsTrigger value="settings">Settings</TabsTrigger>
-                    <TabsTrigger value="anticheat">Anti-Cheat</TabsTrigger>
-                  </TabsList>
+          <div className="flex gap-2">
+            {/* BULK ASSIGN BUTTON */}
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setSelectedStudents([]); // Clear selection when opening
+                setIsBulkAssignDialogOpen(true);
+              }}
+            >
+              <Layers size={18} className="mr-2"/>
+              Bulk Assign Tests
+            </Button>
 
-                  {/* 1. Basic Info Tab */}
-                  <TabsContent value="basic" className="space-y-4 mt-4">
-                    <div className="grid gap-4">
-                      <div>
-                        <Label>Test Title *</Label>
-                        <Input
-                          value={formData.title}
-                          onChange={e => setFormData({ ...formData, title: e.target.value })}
-                          placeholder="Enter test title"
-                        />
-                      </div>
-                      <div>
-                        <Label>Description</Label>
-                        <Textarea
-                          value={formData.description}
-                          onChange={e => setFormData({ ...formData, description: e.target.value })}
-                          placeholder="Enter test description"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="admin" onClick={() => resetForm()}>
+                  <Plus size={18} />
+                  Create Test
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
+                <DialogHeader>
+                  <DialogTitle>{isEditMode ? 'Edit Test' : 'Create New Test'}</DialogTitle>
+                </DialogHeader>
+                <ScrollArea className="max-h-[calc(90vh-120px)] pr-4">
+                  <Tabs defaultValue="basic" className="w-full">
+                    <TabsList className="grid w-full grid-cols-4">
+                      <TabsTrigger value="basic">Basic Info</TabsTrigger>
+                      <TabsTrigger value="questions">Questions</TabsTrigger>
+                      <TabsTrigger value="settings">Settings</TabsTrigger>
+                      <TabsTrigger value="anticheat">Anti-Cheat</TabsTrigger>
+                    </TabsList>
+
+                    {/* 1. Basic Info Tab */}
+                    <TabsContent value="basic" className="space-y-4 mt-4">
+                      <div className="grid gap-4">
                         <div>
-                          <Label>Subject (Optional)</Label>
-                          <Select
-                            value={formData.subject_id || "all"}
-                            onValueChange={v => setFormData({ ...formData, subject_id: v === "all" ? "" : v })}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="All subjects" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="all">All Subjects</SelectItem>
-                              {subjects.map(s => (
-                                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label>Test Type</Label>
-                          <Select
-                            value={formData.test_type}
-                            onValueChange={v => setFormData({ ...formData, test_type: v })}
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="subject">Subject Test</SelectItem>
-                              <SelectItem value="topic">Topic Test</SelectItem>
-                              <SelectItem value="mixed">Mixed Test</SelectItem>
-                              <SelectItem value="weak_areas">Weak Areas Test</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-3 gap-4">
-                        <div>
-                          <Label>Duration (minutes)</Label>
+                          <Label>Test Title *</Label>
                           <Input
-                            type="number"
-                            value={formData.duration_minutes}
-                            onChange={e => setFormData({ ...formData, duration_minutes: parseInt(e.target.value) || 60 })}
+                            value={formData.title}
+                            onChange={e => setFormData({ ...formData, title: e.target.value })}
+                            placeholder="Enter test title"
                           />
                         </div>
                         <div>
-                          <Label>Pass Marks (%)</Label>
-                          <Input
-                            type="number"
-                            value={formData.pass_marks}
-                            onChange={e => setFormData({ ...formData, pass_marks: parseInt(e.target.value) || 40 })}
+                          <Label>Description</Label>
+                          <Textarea
+                            value={formData.description}
+                            onChange={e => setFormData({ ...formData, description: e.target.value })}
+                            placeholder="Enter test description"
                           />
                         </div>
-                        <div>
-                          <Label>Max Attempts</Label>
-                          <Input
-                            type="number"
-                            value={formData.max_attempts}
-                            onChange={e => setFormData({ ...formData, max_attempts: parseInt(e.target.value) || 1 })}
-                          />
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={formData.is_anytime}
-                            onCheckedChange={c => setFormData({ ...formData, is_anytime: c })}
-                          />
-                          <Label>Available Anytime</Label>
-                        </div>
-                      </div>
-                      {!formData.is_anytime && (
                         <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <Label>Start Time</Label>
-                            <Input
-                              type="datetime-local"
-                              value={formData.start_time}
-                              onChange={e => setFormData({ ...formData, start_time: e.target.value })}
-                            />
+                            <Label>Subject (Optional)</Label>
+                            <Select
+                              value={formData.subject_id || "all"}
+                              onValueChange={v => setFormData({ ...formData, subject_id: v === "all" ? "" : v })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="All subjects" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">All Subjects</SelectItem>
+                                {subjects.map(s => (
+                                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
                           <div>
-                            <Label>End Time</Label>
-                            <Input
-                              type="datetime-local"
-                              value={formData.end_time}
-                              onChange={e => setFormData({ ...formData, end_time: e.target.value })}
-                            />
+                            <Label>Test Type</Label>
+                            <Select
+                              value={formData.test_type}
+                              onValueChange={v => setFormData({ ...formData, test_type: v })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="subject">Subject Test</SelectItem>
+                                <SelectItem value="topic">Topic Test</SelectItem>
+                                <SelectItem value="mixed">Mixed Test</SelectItem>
+                                <SelectItem value="weak_areas">Weak Areas Test</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </div>
                         </div>
-                      )}
-                    </div>
-                  </TabsContent>
-
-                  {/* 2. Questions Tab */}
-                  <TabsContent value="questions" className="space-y-4 mt-4">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <p className="text-sm text-muted-foreground">
-                        Selected: {selectedQuestions.length} questions | Available: {filteredQuestions.length}
-                      </p>
-                      <div className="flex gap-2">
-                        <Badge variant="outline">Easy: {formData.easy_percentage}%</Badge>
-                        <Badge variant="outline">Medium: {formData.medium_percentage}%</Badge>
-                        <Badge variant="outline">Hard: {formData.hard_percentage}%</Badge>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <Filter className="w-4 h-4 text-muted-foreground" />
-                      <Select
-                        value={questionFilterTopic}
-                        onValueChange={setQuestionFilterTopic}
-                        disabled={!formData.subject_id}
-                      >
-                        <SelectTrigger className="w-[200px]">
-                          <SelectValue placeholder="Filter by topic" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Topics</SelectItem>
-                          {filteredTopicsForQuestions.map(t => (
-                            <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          const allIds = filteredQuestions.map(q => q.id);
-                          setSelectedQuestions([...new Set([...selectedQuestions, ...allIds])]);
-                        }}
-                      >
-                        Select All
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSelectedQuestions([])}
-                      >
-                        Clear
-                      </Button>
-                    </div>
-
-                    <ScrollArea className="h-[280px] border rounded-lg p-4">
-                      {filteredQuestions.length === 0 ? (
-                        <div className="text-center text-muted-foreground py-8">
-                          No questions found. {!formData.subject_id && 'Select a subject first.'}
-                        </div>
-                      ) : (
-                        filteredQuestions.map(q => (
-                          <div
-                            key={q.id}
-                            className="flex items-start gap-3 p-3 border-b last:border-0 hover:bg-muted/50"
-                          >
-                            <Checkbox
-                              checked={selectedQuestions.includes(q.id)}
-                              onCheckedChange={checked => {
-                                if (checked) {
-                                  setSelectedQuestions([...selectedQuestions, q.id]);
-                                } else {
-                                  setSelectedQuestions(selectedQuestions.filter(id => id !== q.id));
-                                }
-                              }}
-                            />
-                            <div className="flex-1">
-                              <p className="text-sm font-medium">{q.question_text}</p>
-                              <div className="flex flex-wrap gap-2 mt-1">
-                                <Badge variant="secondary" className="text-xs">
-                                  {q.subjects?.name}
-                                </Badge>
-                                <Badge variant="outline" className="text-xs">
-                                  {q.topics?.name}
-                                </Badge>
-                                <Badge variant="outline" className="text-xs">
-                                  {q.difficulty}
-                                </Badge>
-                                <Badge variant="outline" className="text-xs">
-                                  {q.marks} marks
-                                </Badge>
-                              </div>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </ScrollArea>
-                  </TabsContent>
-
-                  {/* 3. Settings Tab */}
-                  <TabsContent value="settings" className="space-y-4 mt-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="flex items-center justify-between p-3 border rounded-lg">
-                        <Label>Shuffle Questions</Label>
-                        <Switch
-                          checked={formData.shuffle_questions}
-                          onCheckedChange={c => setFormData({ ...formData, shuffle_questions: c })}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between p-3 border rounded-lg">
-                        <Label>Shuffle Options</Label>
-                        <Switch
-                          checked={formData.shuffle_options}
-                          onCheckedChange={c => setFormData({ ...formData, shuffle_options: c })}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between p-3 border rounded-lg">
-                        <Label>Show Results</Label>
-                        <Switch
-                          checked={formData.show_results}
-                          onCheckedChange={c => setFormData({ ...formData, show_results: c })}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between p-3 border rounded-lg">
-                        <Label>Show Answers</Label>
-                        <Switch
-                          checked={formData.show_answers}
-                          onCheckedChange={c => setFormData({ ...formData, show_answers: c })}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between p-3 border rounded-lg">
-                        <Label>Allow Navigation</Label>
-                        <Switch
-                          checked={formData.allow_navigation}
-                          onCheckedChange={c => setFormData({ ...formData, allow_navigation: c })}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between p-3 border rounded-lg">
-                        <Label>Allow Review</Label>
-                        <Switch
-                          checked={formData.allow_review}
-                          onCheckedChange={c => setFormData({ ...formData, allow_review: c })}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between p-3 border rounded-lg">
-                        <Label>Question by Question</Label>
-                        <Switch
-                          checked={formData.question_by_question}
-                          onCheckedChange={c => setFormData({ ...formData, question_by_question: c })}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between p-3 border rounded-lg">
-                        <Label>Auto Submit</Label>
-                        <Switch
-                          checked={formData.auto_submit}
-                          onCheckedChange={c => setFormData({ ...formData, auto_submit: c })}
-                        />
-                      </div>
-                    </div>
-                  </TabsContent>
-
-                  {/* 4. Anti-Cheat Tab */}
-                  <TabsContent value="anticheat" className="space-y-4 mt-4">
-                    <Card variant="admin">
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-lg">
-                          <Shield className="w-5 h-5 text-destructive" />
-                          Anti-Cheat Configuration
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="flex items-center justify-between p-3 border rounded-lg">
-                            <Label>Enable Anti-Cheat</Label>
-                            <Switch
-                              checked={formData.anti_cheat_enabled}
-                              onCheckedChange={c => setFormData({ ...formData, anti_cheat_enabled: c })}
-                            />
-                          </div>
-                          <div className="flex items-center justify-between p-3 border rounded-lg">
-                            <Label>Fullscreen Required</Label>
-                            <Switch
-                              checked={formData.fullscreen_required}
-                              onCheckedChange={c => setFormData({ ...formData, fullscreen_required: c })}
-                            />
-                          </div>
-                          <div className="flex items-center justify-between p-3 border rounded-lg">
-                            <Label>Enable Watermark</Label>
-                            <Switch
-                              checked={formData.watermark_enabled}
-                              onCheckedChange={c => setFormData({ ...formData, watermark_enabled: c })}
-                            />
-                          </div>
-                          <div className="p-3 border rounded-lg">
-                            <Label>Tab Switch Limit</Label>
+                        <div className="grid grid-cols-3 gap-4">
+                          <div>
+                            <Label>Duration (minutes)</Label>
                             <Input
                               type="number"
-                              value={formData.tab_switch_limit}
-                              onChange={e => setFormData({ ...formData, tab_switch_limit: parseInt(e.target.value) || 3 })}
-                              className="mt-2"
+                              value={formData.duration_minutes}
+                              onChange={e => setFormData({ ...formData, duration_minutes: parseInt(e.target.value) || 60 })}
+                            />
+                          </div>
+                          <div>
+                            <Label>Pass Marks (%)</Label>
+                            <Input
+                              type="number"
+                              value={formData.pass_marks}
+                              onChange={e => setFormData({ ...formData, pass_marks: parseInt(e.target.value) || 40 })}
+                            />
+                          </div>
+                          <div>
+                            <Label>Max Attempts</Label>
+                            <Input
+                              type="number"
+                              value={formData.max_attempts}
+                              onChange={e => setFormData({ ...formData, max_attempts: parseInt(e.target.value) || 1 })}
                             />
                           </div>
                         </div>
-                        <div className="p-4 bg-muted/50 rounded-lg text-sm space-y-2">
-                          <p className="font-medium">When enabled, the following will be monitored:</p>
-                          <ul className="list-disc list-inside text-muted-foreground space-y-1">
-                            <li>Tab switching detection</li>
-                            <li>Fullscreen exit detection</li>
-                            <li>Copy/paste prevention</li>
-                            <li>Right-click prevention</li>
-                            <li>DevTools detection</li>
-                            <li>Page reload/back button detection</li>
-                            <li>Network disconnect detection</li>
-                          </ul>
+                        <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={formData.is_anytime}
+                              onCheckedChange={c => setFormData({ ...formData, is_anytime: c })}
+                            />
+                            <Label>Available Anytime</Label>
+                          </div>
                         </div>
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
-                </Tabs>
+                        {!formData.is_anytime && (
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <Label>Start Time</Label>
+                              <Input
+                                type="datetime-local"
+                                value={formData.start_time}
+                                onChange={e => setFormData({ ...formData, start_time: e.target.value })}
+                              />
+                            </div>
+                            <div>
+                              <Label>End Time</Label>
+                              <Input
+                                type="datetime-local"
+                                value={formData.end_time}
+                                onChange={e => setFormData({ ...formData, end_time: e.target.value })}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </TabsContent>
 
-                {/* Footer Buttons */}
-                <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
-                  <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button variant="admin" onClick={isEditMode ? handleUpdateTest : handleCreateTest}>
-                    {isEditMode ? 'Update Test' : 'Create Test'}
-                  </Button>
-                </div>
-              </ScrollArea>
-            </DialogContent>
-          </Dialog>
+                    {/* 2. Questions Tab */}
+                    <TabsContent value="questions" className="space-y-4 mt-4">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <p className="text-sm text-muted-foreground">
+                          Selected: {selectedQuestions.length} questions | Available: {filteredQuestions.length}
+                        </p>
+                        <div className="flex gap-2">
+                          <Badge variant="outline">Easy: {formData.easy_percentage}%</Badge>
+                          <Badge variant="outline">Medium: {formData.medium_percentage}%</Badge>
+                          <Badge variant="outline">Hard: {formData.hard_percentage}%</Badge>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Filter className="w-4 h-4 text-muted-foreground" />
+                        <Select
+                          value={questionFilterTopic}
+                          onValueChange={setQuestionFilterTopic}
+                          disabled={!formData.subject_id}
+                        >
+                          <SelectTrigger className="w-[200px]">
+                            <SelectValue placeholder="Filter by topic" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Topics</SelectItem>
+                            {filteredTopicsForQuestions.map(t => (
+                              <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const allIds = filteredQuestions.map(q => q.id);
+                            setSelectedQuestions([...new Set([...selectedQuestions, ...allIds])]);
+                          }}
+                        >
+                          Select All
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedQuestions([])}
+                        >
+                          Clear
+                        </Button>
+                      </div>
+
+                      <ScrollArea className="h-[280px] border rounded-lg p-4">
+                        {filteredQuestions.length === 0 ? (
+                          <div className="text-center text-muted-foreground py-8">
+                            No questions found. {!formData.subject_id && 'Select a subject first.'}
+                          </div>
+                        ) : (
+                          filteredQuestions.map(q => (
+                            <div
+                              key={q.id}
+                              className="flex items-start gap-3 p-3 border-b last:border-0 hover:bg-muted/50"
+                            >
+                              <Checkbox
+                                checked={selectedQuestions.includes(q.id)}
+                                onCheckedChange={checked => {
+                                  if (checked) {
+                                    setSelectedQuestions([...selectedQuestions, q.id]);
+                                  } else {
+                                    setSelectedQuestions(selectedQuestions.filter(id => id !== q.id));
+                                  }
+                                }}
+                              />
+                              <div className="flex-1">
+                                <p className="text-sm font-medium">{q.question_text}</p>
+                                <div className="flex flex-wrap gap-2 mt-1">
+                                  <Badge variant="secondary" className="text-xs">
+                                    {q.subjects?.name}
+                                  </Badge>
+                                  <Badge variant="outline" className="text-xs">
+                                    {q.topics?.name}
+                                  </Badge>
+                                  <Badge variant="outline" className="text-xs">
+                                    {q.difficulty}
+                                  </Badge>
+                                  <Badge variant="outline" className="text-xs">
+                                    {q.marks} marks
+                                  </Badge>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </ScrollArea>
+                    </TabsContent>
+
+                    {/* 3. Settings Tab */}
+                    <TabsContent value="settings" className="space-y-4 mt-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex items-center justify-between p-3 border rounded-lg">
+                          <Label>Shuffle Questions</Label>
+                          <Switch
+                            checked={formData.shuffle_questions}
+                            onCheckedChange={c => setFormData({ ...formData, shuffle_questions: c })}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between p-3 border rounded-lg">
+                          <Label>Shuffle Options</Label>
+                          <Switch
+                            checked={formData.shuffle_options}
+                            onCheckedChange={c => setFormData({ ...formData, shuffle_options: c })}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between p-3 border rounded-lg">
+                          <Label>Show Results</Label>
+                          <Switch
+                            checked={formData.show_results}
+                            onCheckedChange={c => setFormData({ ...formData, show_results: c })}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between p-3 border rounded-lg">
+                          <Label>Show Answers</Label>
+                          <Switch
+                            checked={formData.show_answers}
+                            onCheckedChange={c => setFormData({ ...formData, show_answers: c })}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between p-3 border rounded-lg">
+                          <Label>Allow Navigation</Label>
+                          <Switch
+                            checked={formData.allow_navigation}
+                            onCheckedChange={c => setFormData({ ...formData, allow_navigation: c })}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between p-3 border rounded-lg">
+                          <Label>Allow Review</Label>
+                          <Switch
+                            checked={formData.allow_review}
+                            onCheckedChange={c => setFormData({ ...formData, allow_review: c })}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between p-3 border rounded-lg">
+                          <Label>Question by Question</Label>
+                          <Switch
+                            checked={formData.question_by_question}
+                            onCheckedChange={c => setFormData({ ...formData, question_by_question: c })}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between p-3 border rounded-lg">
+                          <Label>Auto Submit</Label>
+                          <Switch
+                            checked={formData.auto_submit}
+                            onCheckedChange={c => setFormData({ ...formData, auto_submit: c })}
+                          />
+                        </div>
+                      </div>
+                    </TabsContent>
+
+                    {/* 4. Anti-Cheat Tab */}
+                    <TabsContent value="anticheat" className="space-y-4 mt-4">
+                      <Card variant="admin">
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2 text-lg">
+                            <Shield className="w-5 h-5 text-destructive" />
+                            Anti-Cheat Configuration
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="flex items-center justify-between p-3 border rounded-lg">
+                              <Label>Enable Anti-Cheat</Label>
+                              <Switch
+                                checked={formData.anti_cheat_enabled}
+                                onCheckedChange={c => setFormData({ ...formData, anti_cheat_enabled: c })}
+                              />
+                            </div>
+                            <div className="flex items-center justify-between p-3 border rounded-lg">
+                              <Label>Fullscreen Required</Label>
+                              <Switch
+                                checked={formData.fullscreen_required}
+                                onCheckedChange={c => setFormData({ ...formData, fullscreen_required: c })}
+                              />
+                            </div>
+                            <div className="flex items-center justify-between p-3 border rounded-lg">
+                              <Label>Enable Watermark</Label>
+                              <Switch
+                                checked={formData.watermark_enabled}
+                                onCheckedChange={c => setFormData({ ...formData, watermark_enabled: c })}
+                              />
+                            </div>
+                            <div className="p-3 border rounded-lg">
+                              <Label>Tab Switch Limit</Label>
+                              <Input
+                                type="number"
+                                value={formData.tab_switch_limit}
+                                onChange={e => setFormData({ ...formData, tab_switch_limit: parseInt(e.target.value) || 3 })}
+                                className="mt-2"
+                              />
+                            </div>
+                          </div>
+                          <div className="p-4 bg-muted/50 rounded-lg text-sm space-y-2">
+                            <p className="font-medium">When enabled, the following will be monitored:</p>
+                            <ul className="list-disc list-inside text-muted-foreground space-y-1">
+                              <li>Tab switching detection</li>
+                              <li>Fullscreen exit detection</li>
+                              <li>Copy/paste prevention</li>
+                              <li>Right-click prevention</li>
+                              <li>DevTools detection</li>
+                              <li>Page reload/back button detection</li>
+                              <li>Network disconnect detection</li>
+                            </ul>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </TabsContent>
+                  </Tabs>
+
+                  {/* Footer Buttons */}
+                  <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
+                    <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button variant="admin" onClick={isEditMode ? handleUpdateTest : handleCreateTest}>
+                      {isEditMode ? 'Update Test' : 'Create Test'}
+                    </Button>
+                  </div>
+                </ScrollArea>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         {/* Search and Filters */}
@@ -1009,6 +1071,7 @@ export default function AdminTests() {
                           size="sm"
                           onClick={() => {
                             setSelectedTest(test);
+                            setSelectedStudents([]); // Clear previous selections
                             setIsAssignDialogOpen(true);
                           }}
                         >
@@ -1041,7 +1104,7 @@ export default function AdminTests() {
           )}
         </div>
 
-        {/* Assign Dialog */}
+        {/* Assign Dialog (Single Test) */}
         <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
           <DialogContent className="max-w-md">
             <DialogHeader>
@@ -1101,6 +1164,71 @@ export default function AdminTests() {
                   Assign ({selectedStudents.length})
                 </Button>
               </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Bulk Assign Dialog (New Feature) */}
+        <Dialog open={isBulkAssignDialogOpen} onOpenChange={setIsBulkAssignDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Bulk Assign Admin Tests</DialogTitle>
+              <DialogDescription>
+                This will assign all <strong>active, admin-generated tests</strong> to the selected students.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              
+              <div className="flex items-center gap-3 px-4 py-2 bg-muted/50 rounded-lg border">
+                <Checkbox
+                  id="select-all-bulk"
+                  checked={selectedStudents.length === students.length && students.length > 0}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setSelectedStudents(students.map((s) => s.user_id));
+                    } else {
+                      setSelectedStudents([]);
+                    }
+                  }}
+                />
+                <label htmlFor="select-all-bulk" className="text-sm font-semibold cursor-pointer">
+                  Select All Students ({students.length})
+                </label>
+              </div>
+
+              <ScrollArea className="h-[300px] border rounded-lg p-4">
+                {students.map((student) => (
+                  <div
+                    key={student.id}
+                    className="flex items-center gap-3 p-3 border-b last:border-0"
+                  >
+                    <Checkbox
+                      checked={selectedStudents.includes(student.user_id)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedStudents([...selectedStudents, student.user_id]);
+                        } else {
+                          setSelectedStudents(selectedStudents.filter((id) => id !== student.user_id));
+                        }
+                      }}
+                    />
+                    <div>
+                      <p className="font-medium">{student.full_name}</p>
+                      <p className="text-sm text-muted-foreground">{student.email}</p>
+                    </div>
+                  </div>
+                ))}
+              </ScrollArea>
+
+              <DialogFooter className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setIsBulkAssignDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button variant="admin" onClick={handleBulkAssignTests} disabled={selectedStudents.length === 0 || isLoading}>
+                  {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                  Assign to {selectedStudents.length} Students
+                </Button>
+              </DialogFooter>
             </div>
           </DialogContent>
         </Dialog>
