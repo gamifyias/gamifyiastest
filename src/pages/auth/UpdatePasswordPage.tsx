@@ -1,101 +1,107 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Lock, Loader2 } from 'lucide-react';
+import { Mail, ArrowLeft, CheckCircle, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client'; // Ensure this path is correct
 
-export default function UpdatePasswordPage() {
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+export default function ForgotPasswordPage() {
+  const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const navigate = useNavigate();
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
-  // Optional: Check if user is actually logged in (which they should be if they clicked the link)
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
-        toast.error("Invalid or expired link");
-        navigate('/auth/login');
-      }
-    });
-  }, [navigate]);
-
-  const handleUpdatePassword = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (password !== confirmPassword) {
-      return toast.error("Passwords do not match");
-    }
-
-    if (password.length < 6) {
-        return toast.error("Password must be at least 6 characters");
-    }
-
     setIsLoading(true);
-
+    
     try {
-      // Since the user is logged in via the link, we just update the user object
-      const { error } = await supabase.auth.updateUser({ 
-        password: password 
+      // 1. Actually call Supabase
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        // 2. IMPORTANT: Redirect to a page where they can type the NEW password
+        redirectTo: `${window.location.origin}/auth/update-password`,
       });
 
-      if (error) throw error;
-
-      toast.success("Password updated successfully!");
-      navigate('/auth/login'); // Or redirect to dashboard
-    } catch (error: any) {
-      toast.error(error.message || "Failed to update password");
+      if (error) {
+        toast.error(error.message);
+      } else {
+        setIsSubmitted(true);
+        toast.success('Reset link sent! Check your email.');
+      }
+    } catch (error) {
+      toast.error('An unexpected error occurred.');
+      console.error(error);
     } finally {
       setIsLoading(false);
     }
   };
 
+  if (isSubmitted) {
+    return (
+      <div className="min-h-screen bg-game-sky flex items-center justify-center p-6">
+        <div className="w-full max-w-md relative z-10">
+          <Card variant="elevated" className="shadow-pixel-lg text-center">
+            <CardContent className="pt-8 pb-8">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-game-pipe flex items-center justify-center">
+                <CheckCircle className="w-8 h-8 text-white" />
+              </div>
+              <h2 className="text-2xl font-bold font-game mb-2">Check Your Email</h2>
+              <p className="text-muted-foreground mb-6">
+                We've sent a password reset link to <strong>{email}</strong>
+              </p>
+              <Link to="/auth/login">
+                <Button variant="game" size="lg" className="w-full">
+                  Back to Sign In
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-game-sky flex items-center justify-center p-6">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-md relative z-10">
+        <Link 
+          to="/auth/login" 
+          className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors"
+        >
+          <ArrowLeft size={18} />
+          Back to Sign In
+        </Link>
+
         <Card variant="elevated" className="shadow-pixel-lg">
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl">Set New Password</CardTitle>
-            <CardDescription>Enter your new password below</CardDescription>
+            <CardTitle className="text-2xl">Reset Password</CardTitle>
+            <CardDescription>
+              Enter your email and we'll send you a reset link
+            </CardDescription>
           </CardHeader>
+
           <CardContent>
-            <form onSubmit={handleUpdatePassword} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="password">New Password</Label>
+                <Label htmlFor="email">Email</Label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input 
-                    id="password" 
-                    type="password" 
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="Enter your email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     className="pl-10"
-                    placeholder="Min 6 characters"
-                    required 
+                    required
                   />
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirm">Confirm Password</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input 
-                    id="confirm" 
-                    type="password" 
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="pl-10"
-                    placeholder="Re-enter password"
-                    required 
-                  />
-                </div>
-              </div>
-              <Button type="submit" variant="game" className="w-full" disabled={isLoading}>
-                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Update Password'}
+
+              <Button type="submit" variant="game" size="lg" className="w-full" disabled={isLoading}>
+                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Send Reset Link'}
               </Button>
             </form>
           </CardContent>
