@@ -1,186 +1,169 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { StudentLayout } from '@/components/layout/StudentLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Switch } from '@/components/ui/switch'; // Assuming you have this, or use a button toggle
-import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
-import { 
-  ArrowLeft, 
-  CheckCircle, 
-  XCircle, 
-  HelpCircle, 
-  BookOpen, 
-  AlertCircle,
-  Filter,
-  ArrowUp,
-  Eye,
-  EyeOff
+import { useAuth } from '@/contexts/AuthContext';
+import { format } from 'date-fns';
+import { CertificateGenerator, CertificatePreview } from '@/components/CertificateGenerator';
+import {
+  Trophy,
+  Clock,
+  Target,
+  CheckCircle,
+  XCircle,
+  ArrowLeft,
+  Award,
+  AlertTriangle,
+  SkipForward,
+  Loader2,
+  BookOpen,
+  ArrowRight
 } from 'lucide-react';
-import { Loader2 } from 'lucide-react';
 
-// --- Interfaces ---
-
-interface QuestionOption {
+interface AttemptData {
   id: string;
-  option_text: string;
-  is_correct: boolean;
+  test_id: string;
+  total_marks: number;
+  obtained_marks: number;
+  percentage: number;
+  total_questions: number;
+  attempted_questions: number;
+  correct_answers: number;
+  wrong_answers: number;
+  skipped_questions: number;
+  time_taken_seconds: number;
+  is_passed: boolean;
+  is_flagged: boolean;
+  flag_reason: string | null;
+  submitted_at: string;
+  tab_switches: number;
+  fullscreen_exits: number;
+  tests: {
+    title: string;
+    pass_marks: number;
+    show_answers: boolean;
+    subjects: { name: string } | null;
+  };
 }
 
-interface Question {
+// NOTE: You can remove AnswerData interface if you plan to remove the inline review list later
+interface AnswerData {
   id: string;
-  question_text: string;
-  explanation: string | null;
-  difficulty: string;
-  marks: number;
-  question_options: QuestionOption[];
-}
-
-interface StudentAnswer {
   question_id: string;
   selected_options: string[];
   is_correct: boolean;
   marks_obtained: number;
+  time_spent_seconds: number;
+  questions: {
+    question_text: string;
+    question_type: string;
+    difficulty: string;
+    marks: number;
+    negative_marks: number;
+    explanation: string | null;
+    question_options: {
+      id: string;
+      option_text: string;
+      is_correct: boolean;
+    }[];
+  };
 }
 
-// Combined Type for UI
-interface MergedQuestionData {
-  question: Question;
-  answer: StudentAnswer | null; // Null if not visited/generated
-  status: 'correct' | 'incorrect' | 'skipped' | 'unvisited';
-}
-
-interface TestHeader {
-  title: string;
-  subject: string;
-}
-
-export default function StudentTestExplanations() {
+export default function StudentResults() {
   const { id: attemptId } = useParams<{ id: string }>();
-  const [mergedData, setMergedData] = useState<MergedQuestionData[]>([]);
-  const [testInfo, setTestInfo] = useState<TestHeader | null>(null);
+  const { user } = useAuth();
+  const [attempt, setAttempt] = useState<AttemptData | null>(null);
+  const [answers, setAnswers] = useState<AnswerData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  
-  // Filters
-  const [filterType, setFilterType] = useState<'all' | 'correct' | 'incorrect'>('all');
-  const [showUnattempted, setShowUnattempted] = useState(true);
 
   useEffect(() => {
-    if (attemptId) fetchFullTestDetails();
+    if (attemptId) {
+      fetchResults();
+    }
   }, [attemptId]);
 
-  const fetchFullTestDetails = async () => {
+  const fetchResults = async () => {
     try {
-      setIsLoading(true);
-
-      // 1. Get Attempt Info (to find the Test ID)
-      const { data: attempt, error: attemptError } = await supabase
+      // Fetch attempt with test details
+      const { data: attemptData, error: attemptError } = await supabase
         .from('student_test_attempts')
-        .select('test_id, tests(title, subjects(name))')
+        .select(`
+          *,
+          tests (
+            title,
+            pass_marks,
+            show_answers,
+            subjects (name)
+          )
+        `)
         .eq('id', attemptId)
         .single();
 
       if (attemptError) throw attemptError;
+      setAttempt(attemptData as AttemptData);
 
-      setTestInfo({
-        title: attempt.tests?.title || 'Test Results',
-        subject: attempt.tests?.subjects?.name || 'General'
-      });
-
-      const testId = attempt.test_id;
-
-      // 2. Fetch ALL Questions for this Test (Ensures we get unvisited ones)
-      const { data: questionsData, error: qError } = await supabase
-        .from('questions')
+      // Fetch answers
+      const { data: answersData } = await supabase
+        .from('student_answers')
         .select(`
-          id,
-          question_text,
-          explanation,
-          difficulty,
-          marks,
-          question_options (
-            id,
-            option_text,
-            is_correct
+          *,
+          questions (
+            question_text,
+            question_type,
+            difficulty,
+            marks,
+            negative_marks,
+            explanation,
+            question_options (
+              id,
+              option_text,
+              is_correct
+            )
           )
         `)
-        .eq('test_id', testId)
-        .order('created_at', { ascending: true }); // Or order by a 'sequence' column if you have one
-
-      if (qError) throw qError;
-
-      // 3. Fetch User's Answers
-      const { data: answersData, error: aError } = await supabase
-        .from('student_answers')
-        .select('question_id, selected_options, is_correct, marks_obtained')
         .eq('attempt_id', attemptId);
 
-      if (aError) throw aError;
-
-      // 4. Merge Data
-      const merged: MergedQuestionData[] = (questionsData as any[]).map((q) => {
-        const userAns = answersData?.find(a => a.question_id === q.id);
-        
-        let status: MergedQuestionData['status'] = 'unvisited';
-        
-        if (userAns) {
-          if (userAns.selected_options && userAns.selected_options.length > 0) {
-            status = userAns.is_correct ? 'correct' : 'incorrect';
-          } else {
-            status = 'skipped'; // Row exists but no option selected
-          }
-        }
-
-        return {
-          question: q as Question,
-          answer: userAns || null,
-          status
-        };
-      });
-
-      setMergedData(merged);
-
+      if (answersData) {
+        setAnswers(answersData as AnswerData[]);
+      }
+      
     } catch (error) {
-      console.error('Error fetching details:', error);
+      console.error('Error fetching results:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Filter Logic
-  const filteredList = useMemo(() => {
-    return mergedData.filter(item => {
-      // 1. First check: Are we showing unattempted?
-      // If showUnattempted is FALSE, we hide 'skipped' and 'unvisited'
-      if (!showUnattempted) {
-        if (item.status === 'skipped' || item.status === 'unvisited') return false;
-      }
-
-      // 2. Then check specific status tab
-      if (filterType === 'all') return true;
-      if (filterType === 'correct') return item.status === 'correct';
-      if (filterType === 'incorrect') return item.status === 'incorrect';
-      
-      return true;
-    });
-  }, [mergedData, filterType, showUnattempted]);
-
-  const scrollToQuestion = (questionId: string) => {
-    const element = document.getElementById(`q-${questionId}`);
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}m ${secs}s`;
   };
 
   if (isLoading) {
     return (
       <StudentLayout>
-        <div className="flex h-[80vh] items-center justify-center">
+        <div className="flex items-center justify-center min-h-[60vh]">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </StudentLayout>
+    );
+  }
+
+  if (!attempt) {
+    return (
+      <StudentLayout>
+        <div className="flex flex-col items-center justify-center min-h-[60vh]">
+          <p className="text-muted-foreground">Results not found</p>
+          <Link to="/student/tests">
+            <Button variant="outline" className="mt-4">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Tests
+            </Button>
+          </Link>
         </div>
       </StudentLayout>
     );
@@ -188,276 +171,205 @@ export default function StudentTestExplanations() {
 
   return (
     <StudentLayout>
-      <div className="container max-w-6xl mx-auto p-4 md:p-6 space-y-6">
-        
-        {/* HEADER & CONTROLS */}
-        <div className="sticky top-0 z-20 bg-background/95 backdrop-blur py-4 border-b space-y-4">
-          
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Link to={`/student/results/${attemptId}`} className="hover:text-foreground flex items-center gap-1">
-                  <ArrowLeft className="w-4 h-4" /> Back to Results
-                </Link>
-                <span>/</span>
-                <span>{testInfo?.subject}</span>
-              </div>
-              <h1 className="text-2xl font-bold">{testInfo?.title}</h1>
-            </div>
+      <div className="max-w-4xl mx-auto p-6 space-y-6">
+        {/* Top Navigation */}
+        <Link to="/student/tests">
+          <Button variant="outline" size="sm">
+            <ArrowLeft className="w-4 h-4" />
+            Back to Tests
+          </Button>
+        </Link>
 
-            {/* View Toggle: All vs Attempted */}
-            <div className="flex items-center gap-4 bg-muted/30 p-2 rounded-lg border">
-              <div className="flex items-center gap-2 text-sm font-medium px-2">
-                {showUnattempted ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4 text-muted-foreground" />}
-                <span className="hidden md:inline">View Mode:</span>
-              </div>
-              <div className="flex gap-1 bg-muted p-1 rounded-md">
-                <Button 
-                  size="sm" 
-                  variant={showUnattempted ? "default" : "ghost"}
-                  onClick={() => setShowUnattempted(true)}
-                  className="text-xs h-8"
-                >
-                  All Questions
-                </Button>
-                <Button 
-                  size="sm" 
-                  variant={!showUnattempted ? "default" : "ghost"}
-                  onClick={() => setShowUnattempted(false)}
-                  className="text-xs h-8"
-                >
-                  Attempted Only
-                </Button>
-              </div>
+        {/* Result Header */}
+        <Card variant={attempt.is_passed ? 'gameHighlight' : 'default'}>
+          <CardContent className="p-8 text-center">
+            <div className={`w-24 h-24 mx-auto mb-4 rounded-full flex items-center justify-center ${
+              attempt.is_passed 
+                ? 'bg-accent/20 text-accent' 
+                : 'bg-destructive/20 text-destructive'
+            }`}>
+              {attempt.is_passed ? (
+                <Trophy className="w-12 h-12" />
+              ) : (
+                <XCircle className="w-12 h-12" />
+              )}
             </div>
-          </div>
+            <h1 className="text-3xl font-bold font-game mb-2">
+              {attempt.is_passed ? 'Congratulations!' : 'Keep Trying!'}
+            </h1>
+            <p className="text-muted-foreground mb-4">{attempt.tests.title}</p>
+            <div className={`text-6xl font-bold ${
+              attempt.is_passed ? 'text-accent' : 'text-destructive'
+            }`}>
+              {Math.round(attempt.percentage)}%
+            </div>
+            <p className="text-muted-foreground mt-2">
+              {attempt.obtained_marks} / {attempt.total_marks} marks
+            </p>
+            <Badge 
+              variant={attempt.is_passed ? 'default' : 'destructive'} 
+              className="mt-4"
+            >
+              {attempt.is_passed ? 'PASSED' : 'FAILED'} (Pass: {attempt.tests.pass_marks}%)
+            </Badge>
 
-          <Tabs defaultValue="all" value={filterType} onValueChange={(v) => setFilterType(v as any)}>
-            <TabsList className="grid grid-cols-3 w-full md:w-[400px]">
-              <TabsTrigger value="all">
-                All {showUnattempted ? '' : 'Attempted'}
-              </TabsTrigger>
-              <TabsTrigger value="correct" className="text-green-600">Correct</TabsTrigger>
-              <TabsTrigger value="incorrect" className="text-red-600">Incorrect</TabsTrigger>
-            </TabsList>
-          </Tabs>
+            {attempt.is_flagged && (
+              <div className="mt-4 p-3 bg-destructive/10 rounded-lg text-destructive text-sm flex items-center justify-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                Flagged: {attempt.flag_reason || 'Suspicious activity detected'}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card variant="default">
+            <CardContent className="p-4 text-center">
+              <CheckCircle className="w-8 h-8 mx-auto mb-2 text-accent" />
+              <p className="text-2xl font-bold">{attempt.correct_answers}</p>
+              <p className="text-sm text-muted-foreground">Correct</p>
+            </CardContent>
+          </Card>
+          <Card variant="default">
+            <CardContent className="p-4 text-center">
+              <XCircle className="w-8 h-8 mx-auto mb-2 text-destructive" />
+              <p className="text-2xl font-bold">{attempt.wrong_answers}</p>
+              <p className="text-sm text-muted-foreground">Wrong</p>
+            </CardContent>
+          </Card>
+          <Card variant="default">
+            <CardContent className="p-4 text-center">
+              <SkipForward className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+              <p className="text-2xl font-bold">{attempt.skipped_questions}</p>
+              <p className="text-sm text-muted-foreground">Skipped</p>
+            </CardContent>
+          </Card>
+          <Card variant="default">
+            <CardContent className="p-4 text-center">
+              <Clock className="w-8 h-8 mx-auto mb-2 text-secondary" />
+              <p className="text-2xl font-bold">{formatTime(attempt.time_taken_seconds || 0)}</p>
+              <p className="text-sm text-muted-foreground">Time Taken</p>
+            </CardContent>
+          </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          
-          {/* MAIN LIST */}
-          <div className="lg:col-span-8 space-y-8">
-            {filteredList.length === 0 ? (
-              <Card className="p-12 text-center text-muted-foreground">
-                <Filter className="w-12 h-12 mx-auto mb-4 opacity-20" />
-                <p>No questions found matching your selection.</p>
-                {!showUnattempted && (
-                  <Button variant="link" onClick={() => setShowUnattempted(true)} className="mt-2">
-                    Show Unattempted Questions
-                  </Button>
-                )}
-              </Card>
-            ) : (
-              filteredList.map((item, index) => {
-                const { question, answer, status } = item;
-                const isCorrect = status === 'correct';
-                const isSkipped = status === 'skipped' || status === 'unvisited';
-                const selectedIds = answer?.selected_options || [];
-
-                return (
-                  <Card key={question.id} id={`q-${question.id}`} 
-                    className="scroll-mt-36 overflow-hidden border-l-4 shadow-sm"
-                    style={{ 
-                      borderLeftColor: isCorrect ? '#22c55e' : isSkipped ? '#94a3b8' : '#ef4444' 
-                    }}
-                  >
-                    {/* Question Header */}
-                    <CardHeader className="bg-muted/30 pb-4 py-3">
-                      <div className="flex justify-between items-start gap-4">
-                        <div className="flex items-center gap-3">
-                          <span className="flex items-center justify-center w-8 h-8 rounded-full bg-background border text-sm font-bold shadow-sm">
-                            {mergedData.findIndex(d => d.question.id === question.id) + 1}
-                          </span>
-                          
-                          <div className="flex flex-wrap items-center gap-2">
-                            {status === 'correct' && (
-                              <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200 gap-1">
-                                <CheckCircle className="w-3 h-3"/> Correct
-                              </Badge>
-                            )}
-                            {status === 'incorrect' && (
-                              <Badge variant="destructive" className="gap-1">
-                                <XCircle className="w-3 h-3"/> Incorrect
-                              </Badge>
-                            )}
-                            {(status === 'skipped' || status === 'unvisited') && (
-                              <Badge variant="secondary" className="gap-1 text-muted-foreground">
-                                <HelpCircle className="w-3 h-3"/> {status === 'unvisited' ? 'Not Seen' : 'Skipped'}
-                              </Badge>
-                            )}
-                            <Badge variant="outline" className="text-xs">{question.difficulty}</Badge>
-                          </div>
-                        </div>
-                        <div className="text-right text-sm font-medium text-muted-foreground whitespace-nowrap">
-                          {answer?.marks_obtained || 0} / {question.marks} Marks
-                        </div>
-                      </div>
-                    </CardHeader>
-                    
-                    <CardContent className="pt-6 space-y-6">
-                      {/* Question Text */}
-                      <div className="text-lg font-medium leading-relaxed">
-                        {question.question_text}
-                      </div>
-
-                      {/* Options Grid */}
-                      <div className="grid gap-3">
-                        {question.question_options.map((option) => {
-                          const isSelected = selectedIds.includes(option.id);
-                          const isCorrectOption = option.is_correct;
-                          
-                          let optionClass = "p-4 rounded-lg border flex items-start gap-3 transition-colors ";
-                          
-                          if (isCorrectOption) {
-                            optionClass += "bg-green-50/50 border-green-200 text-green-900";
-                          } else if (isSelected && !isCorrectOption) {
-                            optionClass += "bg-red-50/50 border-red-200 text-red-900";
-                          } else {
-                            optionClass += "bg-card hover:bg-muted/50 border-muted";
-                          }
-
-                          return (
-                            <div key={option.id} className={optionClass}>
-                              <div className="mt-0.5">
-                                {isCorrectOption ? (
-                                  <CheckCircle className="w-5 h-5 text-green-600" />
-                                ) : isSelected ? (
-                                  <XCircle className="w-5 h-5 text-red-500" />
-                                ) : (
-                                  <div className="w-5 h-5 rounded-full border-2 border-muted-foreground/30" />
-                                )}
-                              </div>
-                              <div className="flex-1">
-                                <span className={isCorrectOption || isSelected ? "font-medium" : ""}>
-                                  {option.option_text}
-                                </span>
-                                {isCorrectOption && (
-                                  <span className="block text-xs font-bold text-green-600 mt-1 uppercase tracking-wider">
-                                    Correct Answer
-                                  </span>
-                                )}
-                                {isSelected && !isCorrectOption && (
-                                  <span className="block text-xs font-bold text-red-500 mt-1 uppercase tracking-wider">
-                                    Your Answer
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {/* Explanation Box */}
-                      <div className="relative overflow-hidden rounded-xl border border-blue-100 bg-blue-50/30 dark:bg-blue-950/10 dark:border-blue-900">
-                        <div className="absolute top-0 left-0 w-1 h-full bg-blue-500/50" />
-                        <div className="p-5">
-                          <div className="flex items-center gap-2 mb-3 text-blue-700 dark:text-blue-400 font-semibold">
-                            <BookOpen className="w-5 h-5" />
-                            <span>Explanation</span>
-                          </div>
-                          {question.explanation ? (
-                            <div className="text-muted-foreground leading-relaxed text-sm md:text-base">
-                              {question.explanation}
-                            </div>
-                          ) : (
-                            <div className="text-muted-foreground italic text-sm flex items-center gap-2 opacity-60">
-                              <AlertCircle className="w-4 h-4" /> No detailed explanation available.
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })
-            )}
-          </div>
-
-          {/* RIGHT SIDEBAR: NAVIGATOR */}
-          <div className="hidden lg:block lg:col-span-4">
-            <div className="sticky top-40 space-y-4">
-              <Card>
-                <CardHeader className="pb-3 bg-muted/20">
-                  <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
-                    Question Navigator
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <ScrollArea className="h-[calc(100vh-350px)] pr-2">
-                    <div className="grid grid-cols-5 gap-2">
-                      {mergedData.map((item, idx) => {
-                        const { status, question } = item;
-                        
-                        // Determine if button is disabled based on view settings
-                        const isHiddenByToggle = !showUnattempted && (status === 'skipped' || status === 'unvisited');
-                        
-                        let btnColor = "bg-muted text-muted-foreground border-transparent hover:bg-muted-foreground/20"; 
-                        if (status === 'correct') btnColor = "bg-green-100 text-green-700 border-green-200 hover:bg-green-200";
-                        else if (status === 'incorrect') btnColor = "bg-red-100 text-red-700 border-red-200 hover:bg-red-200";
-                        else if (status === 'unvisited') btnColor = "bg-slate-100 text-slate-400 border-slate-200";
-
-                        return (
-                          <button
-                            key={question.id}
-                            onClick={() => !isHiddenByToggle && scrollToQuestion(question.id)}
-                            disabled={isHiddenByToggle}
-                            className={`
-                              h-9 w-full rounded-md text-xs font-bold transition-all border
-                              ${btnColor}
-                              ${isHiddenByToggle ? 'opacity-10 cursor-not-allowed' : ''}
-                            `}
-                          >
-                            {idx + 1}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </ScrollArea>
-                  
-                  {/* Legend */}
-                  <div className="mt-6 space-y-2 text-xs text-muted-foreground border-t pt-4">
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-2">
-                        <div className="w-3 h-3 bg-green-100 border border-green-200 rounded" /> Correct
-                      </span>
-                      <span className="font-mono">{mergedData.filter(d => d.status === 'correct').length}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-2">
-                        <div className="w-3 h-3 bg-red-100 border border-red-200 rounded" /> Incorrect
-                      </span>
-                      <span className="font-mono">{mergedData.filter(d => d.status === 'incorrect').length}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-2">
-                        <div className="w-3 h-3 bg-muted border border-muted-foreground/30 rounded" /> Skipped/Unseen
-                      </span>
-                      <span className="font-mono">{mergedData.filter(d => d.status === 'skipped' || d.status === 'unvisited').length}</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Button 
-                variant="outline" 
-                className="w-full" 
-                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-              >
-                <ArrowUp className="w-4 h-4 mr-2" /> Back to Top
-              </Button>
+        {/* Accuracy Bar */}
+        <Card variant="default">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-medium">Accuracy</span>
+              <span className="font-bold">{Math.round((attempt.correct_answers / attempt.attempted_questions) * 100 || 0)}%</span>
             </div>
-          </div>
+            <div className="h-4 bg-muted rounded-full overflow-hidden flex">
+              <div 
+                className="h-full bg-accent"
+                style={{ width: `${(attempt.correct_answers / attempt.total_questions) * 100}%` }}
+              />
+              <div 
+                className="h-full bg-destructive"
+                style={{ width: `${(attempt.wrong_answers / attempt.total_questions) * 100}%` }}
+              />
+              <div 
+                className="h-full bg-muted-foreground/30"
+                style={{ width: `${(attempt.skipped_questions / attempt.total_questions) * 100}%` }}
+              />
+            </div>
+            <div className="flex justify-between mt-2 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full bg-accent" /> Correct
+              </span>
+              <span className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full bg-destructive" /> Wrong
+              </span>
+              <span className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full bg-muted-foreground/30" /> Skipped
+              </span>
+            </div>
+          </CardContent>
+        </Card>
 
+        {/* Certificate Section */}
+        {attempt.is_passed && (
+          <Card variant="gameHighlight">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Award className="w-5 h-5 text-game-gold" />
+                Your Certificate
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <CertificatePreview
+                studentName={user?.full_name || 'Student'}
+                testTitle={attempt.tests.title}
+                score={attempt.obtained_marks}
+                totalMarks={attempt.total_marks}
+                percentage={attempt.percentage}
+                completedDate={attempt.submitted_at}
+                certificateNumber={`CERT-${attemptId?.slice(0, 8).toUpperCase()}`}
+              />
+              <CertificateGenerator
+                studentName={user?.full_name || 'Student'}
+                testTitle={attempt.tests.title}
+                score={attempt.obtained_marks}
+                totalMarks={attempt.total_marks}
+                percentage={attempt.percentage}
+                completedDate={attempt.submitted_at}
+                certificateNumber={`CERT-${attemptId?.slice(0, 8).toUpperCase()}`}
+              />
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Test Info Footer */}
+        <Card variant="default">
+          <CardContent className="p-6">
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-muted-foreground">Test</p>
+                <p className="font-medium">{attempt.tests.title}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Subject</p>
+                <p className="font-medium">{attempt.tests.subjects?.name || 'N/A'}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Submitted</p>
+                <p className="font-medium">
+                  {format(new Date(attempt.submitted_at), 'PPp')}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* MAIN ACTIONS */}
+        <div className="flex flex-col md:flex-row gap-4">
+          <Link to="/student/tests" className="flex-1 order-2 md:order-1">
+            <Button variant="outline" className="w-full">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Tests
+            </Button>
+          </Link>
+
+          {/* NEW BUTTON FOR EXPLANATIONS */}
+          <Link 
+            to={`/student/results/${attemptId}/explanations`} 
+            className="flex-1 order-1 md:order-2"
+          >
+            <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+              <BookOpen className="w-4 h-4 mr-2" />
+              View Solutions & Explanations
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          </Link>
+
+          <Link to="/student/analytics" className="flex-1 order-3">
+            <Button variant="game" className="w-full">
+              <Award className="w-4 h-4 mr-2" />
+              View Analytics
+            </Button>
+          </Link>
         </div>
       </div>
     </StudentLayout>

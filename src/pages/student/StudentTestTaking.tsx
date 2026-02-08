@@ -11,7 +11,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAntiCheat } from '@/hooks/useAntiCheat';
-// import { useAIProctor } from '@/hooks/useAIProctor';
 import { toast } from 'sonner';
 import {
   Clock,
@@ -23,11 +22,7 @@ import {
   Shield,
   Maximize,
   Loader2,
-  CameraOff,
-  Eye,
 } from 'lucide-react';
-
-// --- Interfaces ---
 
 interface Question {
   id: string;
@@ -75,7 +70,6 @@ export default function StudentTestTaking() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // --- State ---
   const [test, setTest] = useState<TestData | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -84,14 +78,11 @@ export default function StudentTestTaking() {
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  // UI State
   const [showStartDialog, setShowStartDialog] = useState(true);
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
   const [testStarted, setTestStarted] = useState(false);
   const [questionStartTime, setQuestionStartTime] = useState(Date.now());
 
-  // --- Hook 1: Standard Anti-Cheat (Tabs, Fullscreen) ---
   const {
     violations,
     warningMessage,
@@ -107,44 +98,13 @@ export default function StudentTestTaking() {
     },
   });
 
-  // --- Hook 2: Advanced AI Proctoring (Webcam) ---
-  const { 
-    videoRef, 
-    hasCamera, 
-    cameraPermission, 
-    isModelLoading,
-    aiStatus 
-  } = useAIProctor({
-    attemptId: attemptId || '',
-    isActive: testStarted && !isSubmitting, // Only active during the test
-    onViolation: (type, message) => {
-      // 1. Show Toast Warning
-      toast.warning(message, {
-        duration: 4000,
-        icon: <Eye className="w-5 h-5 text-orange-500" />,
-        style: { border: '2px solid orange', backgroundColor: '#fff7ed' }
-      });
-
-      // 2. Log severe AI violations to DB
-      if (attemptId && (type === 'multiple_faces' || type === 'looking_away')) {
-         supabase.from('anti_cheat_logs').insert([{
-           attempt_id: attemptId,
-           user_id: user?.id,
-           violation_type: type,
-           violation_details: { message }
-         }]);
-      }
-    }
-  });
-
-  // --- Effects ---
   useEffect(() => {
     if (testId && user?.id) {
       fetchTestData();
     }
   }, [testId, user?.id]);
 
-  // Timer Logic
+  // Timer
   useEffect(() => {
     if (!testStarted || timeRemaining <= 0) return;
 
@@ -161,7 +121,6 @@ export default function StudentTestTaking() {
     return () => clearInterval(timer);
   }, [testStarted, timeRemaining]);
 
-  // --- Functions ---
   const fetchTestData = async () => {
     try {
       // Fetch test
@@ -175,7 +134,7 @@ export default function StudentTestTaking() {
       setTest(testData);
       setTimeRemaining(testData.duration_minutes * 60);
 
-      // Fetch questions
+      // Fetch questions with options
       const { data: testQuestions, error: questionsError } = await supabase
         .from('test_questions')
         .select(`
@@ -194,7 +153,7 @@ export default function StudentTestTaking() {
 
       if (questionsError) throw questionsError;
 
-      // Fetch options
+      // Fetch options for each question
       const questionIds = testQuestions?.map(tq => tq.questions?.id).filter(Boolean) || [];
       const { data: options } = await supabase
         .from('question_options')
@@ -202,6 +161,7 @@ export default function StudentTestTaking() {
         .in('question_id', questionIds)
         .order('sort_order');
 
+      // Combine questions with options
       const questionsWithOptions = testQuestions?.map(tq => ({
         ...tq.questions,
         options: options?.filter(o => o.question_id === tq.questions?.id) || [],
@@ -220,8 +180,10 @@ export default function StudentTestTaking() {
 
       if (existingAttempt) {
         setAttemptId(existingAttempt.id);
-        const elapsedSeconds = Math.floor((Date.now() - new Date(existingAttempt.started_at).getTime()) / 1000);
-        setTimeRemaining(Math.max(0, (testData.duration_minutes * 60) - elapsedSeconds));
+        setTimeRemaining(
+          (testData.duration_minutes * 60) - 
+          Math.floor((Date.now() - new Date(existingAttempt.started_at).getTime()) / 1000)
+        );
         
         // Fetch existing answers
         const { data: existingAnswers } = await supabase
@@ -257,6 +219,7 @@ export default function StudentTestTaking() {
 
   const handleStartTest = async () => {
     try {
+      // Create new attempt
       const { data: attempt, error } = await supabase
         .from('student_test_attempts')
         .insert({
@@ -348,6 +311,7 @@ export default function StudentTestTaking() {
     setIsSubmitting(true);
 
     try {
+      // Calculate scores
       let obtainedMarks = 0;
       let correctAnswers = 0;
       let wrongAnswers = 0;
@@ -364,6 +328,7 @@ export default function StudentTestTaking() {
           correctOptions.length === answer.selectedOptions.length &&
           correctOptions.every(o => answer.selectedOptions.includes(o));
 
+        // Update answer with correctness
         await supabase
           .from('student_answers')
           .update({
@@ -386,6 +351,7 @@ export default function StudentTestTaking() {
       const isPassed = percentage >= test!.pass_marks;
       const timeTaken = (test!.duration_minutes * 60) - timeRemaining;
 
+      // Update attempt
       await supabase
         .from('student_test_attempts')
         .update({
@@ -404,7 +370,7 @@ export default function StudentTestTaking() {
         })
         .eq('id', attemptId);
 
-      // Update leaderboard
+      // Update leaderboard - fetch current values and increment
       const { data: currentLeaderboard } = await supabase
         .from('leaderboard')
         .select('tests_completed, tests_passed, total_xp')
@@ -456,16 +422,10 @@ export default function StudentTestTaking() {
   const reviewCount = Object.values(answers).filter(a => a.isMarkedForReview).length;
 
   return (
-    <div 
-      className="min-h-screen bg-background select-none"
-      onContextMenu={(e) => e.preventDefault()}
-      onCopy={(e) => e.preventDefault()}
-      onPaste={(e) => e.preventDefault()}
-      onCut={(e) => e.preventDefault()}
-    >
-      {/* Warning Banner (Standard Anti-Cheat) */}
+    <div className="min-h-screen bg-background select-none">
+      {/* Warning Banner */}
       {warningMessage && (
-        <div className="fixed top-0 left-0 right-0 z-[60] bg-destructive text-destructive-foreground p-4 text-center shadow-lg animate-in slide-in-from-top">
+        <div className="fixed top-0 left-0 right-0 z-50 bg-destructive text-destructive-foreground p-4 text-center">
           <AlertTriangle className="inline-block w-5 h-5 mr-2" />
           {warningMessage}
         </div>
@@ -477,62 +437,6 @@ export default function StudentTestTaking() {
           <div className="text-6xl font-bold transform -rotate-45">
             {user?.full_name} | {user?.email}
           </div>
-        </div>
-      )}
-
-      {/* --- AI PROCTORING CAMERA OVERLAY --- */}
-      {testStarted && hasCamera && (
-        <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end pointer-events-none">
-          <div className={`relative w-48 h-36 bg-black rounded-lg overflow-hidden border-2 shadow-2xl transition-colors duration-300 ${
-            aiStatus === 'detecting' ? 'border-green-500/50' : 
-            aiStatus === 'no_face' ? 'border-red-500' : 
-            aiStatus === 'multiple_faces' ? 'border-red-500' :
-            'border-yellow-500'
-          }`}>
-            {/* Mirror the video so it feels natural */}
-            <video 
-              ref={videoRef} 
-              className="w-full h-full object-cover transform scale-x-[-1]" 
-              muted 
-              playsInline 
-              autoPlay
-            />
-            
-            {/* Live Status Indicator */}
-            <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-black/60 px-2 py-1 rounded-md backdrop-blur-sm">
-              <div className={`w-2 h-2 rounded-full animate-pulse ${
-                aiStatus === 'detecting' ? 'bg-green-500' : 'bg-red-500'
-              }`} />
-              <span className={`text-[10px] font-bold tracking-wide uppercase ${
-                aiStatus === 'detecting' ? 'text-green-400' : 'text-red-400'
-              }`}>
-                {aiStatus === 'detecting' ? 'MONITORING' : 
-                 aiStatus === 'no_face' ? 'NO FACE' : 
-                 aiStatus === 'multiple_faces' ? 'MULTIPLE FACES' : 
-                 aiStatus === 'looking_away' ? 'LOOKING AWAY' : 
-                 'INITIALIZING'}
-              </span>
-            </div>
-
-            {/* Loading Spinner */}
-            {isModelLoading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/80">
-                <Loader2 className="w-6 h-6 text-primary animate-spin" />
-              </div>
-            )}
-          </div>
-          
-          <div className="mt-1 text-[10px] text-muted-foreground bg-background/80 px-2 py-0.5 rounded backdrop-blur border shadow-sm">
-            AI Proctoring Active
-          </div>
-        </div>
-      )}
-
-      {/* Fallback if Camera Denied/Missing */}
-      {testStarted && !hasCamera && cameraPermission === 'denied' && (
-        <div className="fixed bottom-4 right-4 z-50 p-3 bg-muted/90 rounded-lg border border-destructive/50 flex items-center gap-2 shadow-lg backdrop-blur">
-          <CameraOff className="w-4 h-4 text-destructive" />
-          <span className="text-xs font-medium text-muted-foreground">Camera disabled</span>
         </div>
       )}
 
@@ -569,13 +473,13 @@ export default function StudentTestTaking() {
               <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
                 <div className="flex items-center gap-2 text-destructive font-medium mb-2">
                   <Shield className="w-4 h-4" />
-                  Anti-Cheat & Proctoring Enabled
+                  Anti-Cheat Enabled
                 </div>
                 <ul className="text-sm text-muted-foreground space-y-1">
                   {test.fullscreen_required && <li>• Fullscreen mode required</li>}
                   <li>• Tab switching limited to {test.tab_switch_limit} times</li>
                   <li>• Copy/paste disabled</li>
-                  <li>• <strong>AI Webcam Monitoring Active</strong></li>
+                  <li>• Right-click disabled</li>
                 </ul>
               </div>
             )}
@@ -677,7 +581,7 @@ export default function StudentTestTaking() {
                     </Button>
                   </div>
 
-                  {/* Question Text */}
+                  {/* Question Text - FIX: Added whitespace-pre-wrap and leading-relaxed */}
                   <div className="mb-6">
                     <div className="text-lg whitespace-pre-wrap leading-relaxed">
                       {currentQuestion.question_text}
@@ -712,6 +616,7 @@ export default function StudentTestTaking() {
                             <span className="font-medium mr-2">
                               {String.fromCharCode(65 + idx)}.
                             </span>
+                            {/* FIX: Added whitespace-pre-wrap for options too */}
                             <span className="whitespace-pre-wrap">
                               {option.option_text}
                             </span>
@@ -749,6 +654,7 @@ export default function StudentTestTaking() {
                             <span className="font-medium mr-2">
                               {String.fromCharCode(65 + idx)}.
                             </span>
+                             {/* FIX: Added whitespace-pre-wrap for options too */}
                             <span className="whitespace-pre-wrap">
                               {option.option_text}
                             </span>
@@ -841,7 +747,7 @@ export default function StudentTestTaking() {
                   </div>
                 </div>
 
-                {/* Violations Warning (Sidebar) */}
+                {/* Violations Warning */}
                 {(violations.tabSwitches > 0 || violations.fullscreenExits > 0) && (
                   <div className="mt-6 p-3 bg-destructive/10 rounded-lg">
                     <p className="text-sm font-medium text-destructive flex items-center gap-1">
