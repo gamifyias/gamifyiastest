@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Mail, ArrowLeft, CheckCircle } from 'lucide-react';
+import { Mail, ArrowLeft, CheckCircle, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client'; // Ensure this path is correct
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -16,12 +17,25 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setIsLoading(true);
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    setIsLoading(false);
-    setIsSubmitted(true);
-    toast.success('Reset link sent! Check your email.');
+    try {
+      // 1. Actually call Supabase
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        // 2. IMPORTANT: Redirect to a page where they can type the NEW password
+        redirectTo: `${window.location.origin}/auth/update-password`,
+      });
+
+      if (error) {
+        toast.error(error.message);
+      } else {
+        setIsSubmitted(true);
+        toast.success('Reset link sent! Check your email.');
+      }
+    } catch (error) {
+      toast.error('An unexpected error occurred.');
+      console.error(error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (isSubmitted) {
@@ -51,14 +65,7 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="min-h-screen bg-game-sky flex items-center justify-center p-6">
-      {/* Decorative Clouds */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-20 left-10 w-32 h-16 bg-game-cloud rounded-full opacity-80 float" />
-        <div className="absolute top-32 right-20 w-40 h-20 bg-game-cloud rounded-full opacity-70 float" style={{ animationDelay: '1s' }} />
-      </div>
-
       <div className="w-full max-w-md relative z-10">
-        {/* Back Button */}
         <Link 
           to="/auth/login" 
           className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-6 transition-colors"
@@ -69,9 +76,6 @@ export default function ForgotPasswordPage() {
 
         <Card variant="elevated" className="shadow-pixel-lg">
           <CardHeader className="text-center">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-to-br from-game-gold to-game-star flex items-center justify-center shadow-pixel">
-              <span className="text-primary-foreground font-pixel text-lg">GI</span>
-            </div>
             <CardTitle className="text-2xl">Reset Password</CardTitle>
             <CardDescription>
               Enter your email and we'll send you a reset link
@@ -97,7 +101,7 @@ export default function ForgotPasswordPage() {
               </div>
 
               <Button type="submit" variant="game" size="lg" className="w-full" disabled={isLoading}>
-                {isLoading ? 'Sending...' : 'Send Reset Link'}
+                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Send Reset Link'}
               </Button>
             </form>
           </CardContent>
