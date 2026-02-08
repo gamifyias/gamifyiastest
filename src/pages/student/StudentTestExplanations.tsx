@@ -6,9 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Switch } from '@/components/ui/switch'; // Assuming you have this, or use a button toggle
-import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { 
   ArrowLeft, 
   CheckCircle, 
@@ -19,9 +18,9 @@ import {
   Filter,
   ArrowUp,
   Eye,
-  EyeOff
+  EyeOff,
+  Loader2
 } from 'lucide-react';
-import { Loader2 } from 'lucide-react';
 
 // --- Interfaces ---
 
@@ -47,10 +46,9 @@ interface StudentAnswer {
   marks_obtained: number;
 }
 
-// Combined Type for UI
 interface MergedQuestionData {
   question: Question;
-  answer: StudentAnswer | null; // Null if not visited/generated
+  answer: StudentAnswer | null;
   status: 'correct' | 'incorrect' | 'skipped' | 'unvisited';
 }
 
@@ -77,10 +75,16 @@ export default function StudentTestExplanations() {
     try {
       setIsLoading(true);
 
-      // 1. Get Attempt Info (to find the Test ID)
+      // 1. Get Attempt Info
       const { data: attempt, error: attemptError } = await supabase
         .from('student_test_attempts')
-        .select('test_id, tests(title, subjects(name))')
+        .select(`
+          test_id, 
+          tests (
+            title, 
+            subjects (name)
+          )
+        `)
         .eq('id', attemptId)
         .single();
 
@@ -93,59 +97,113 @@ export default function StudentTestExplanations() {
 
       const testId = attempt.test_id;
 
-      // 2. Fetch ALL Questions for this Test (Ensures we get unvisited ones)
-      const { data: questionsData, error: qError } = await supabase
-        .from('questions')
+      // 2. Fetch User's Answers (Source of Truth for what was seen)
+      // We join questions and options here directly
+      const { data: answersData, error: answersError } = await supabase
+        .from('student_answers')
         .select(`
-          id,
-          question_text,
-          explanation,
-          difficulty,
-          marks,
-          question_options (
+          question_id,
+          selected_options,
+          is_correct,
+          marks_obtained,
+          questions (
             id,
-            option_text,
-            is_correct
+            question_text,
+            explanation,
+            difficulty,
+            marks,
+            question_options (
+              id,
+              option_text,
+              is_correct
+            )
           )
         `)
-        .eq('test_id', testId)
-        .order('created_at', { ascending: true }); // Or order by a 'sequence' column if you have one
-
-      if (qError) throw qError;
-
-      // 3. Fetch User's Answers
-      const { data: answersData, error: aError } = await supabase
-        .from('student_answers')
-        .select('question_id, selected_options, is_correct, marks_obtained')
         .eq('attempt_id', attemptId);
 
-      if (aError) throw aError;
+      if (answersError) throw answersError;
 
-      // 4. Merge Data
-      const merged: MergedQuestionData[] = (questionsData as any[]).map((q) => {
-        const userAns = answersData?.find(a => a.question_id === q.id);
+      // 3. Try to fetch ALL questions from test_questions (for Unvisited ones)
+      // This might return empty if it's a dynamic test
+      const { data: testQuestionsLink } = await supabase
+        .from('test_questions')
+        .select(`
+          questions (
+            id,
+            question_text,
+            explanation,
+            difficulty,
+            marks,
+            question_options (
+              id,
+              option_text,
+              is_correct
+            )
+          )
+        `)
+        .eq('test_id', testId);
+
+      // 4. MERGE STRATEGY
+      // Create a Map of all known questions
+      const questionMap = new Map<string, Question>();
+
+      // A. Add questions found in test_questions (if any)
+      if (testQuestionsLink) {
+        testQuestionsLink.forEach((item: any) => {
+          if (item.questions) {
+            questionMap.set(item.questions.id, item.questions);
+          }
+        });
+      }
+
+      // B. Add/Overwrite with questions found in student_answers 
+      // (This ensures we have the questions even if test_questions was empty)
+      answersData?.forEach((item: any) => {
+        if (item.questions) {
+          questionMap.set(item.questions.id, item.questions);
+        }
+      });
+
+      const allUniqueQuestions = Array.from(questionMap.values());
+
+      // 5. Build Final Data Structure
+      const merged: MergedQuestionData[] = allUniqueQuestions.map((q) => {
+        // Find the user's answer for this question
+        const userAnsRaw = answersData?.find(a => a.question_id === q.id);
         
+        let answerObj: StudentAnswer | null = null;
         let status: MergedQuestionData['status'] = 'unvisited';
-        
-        if (userAns) {
-          if (userAns.selected_options && userAns.selected_options.length > 0) {
-            status = userAns.is_correct ? 'correct' : 'incorrect';
+
+        if (userAnsRaw) {
+          answerObj = {
+            question_id: userAnsRaw.question_id,
+            selected_options: userAnsRaw.selected_options || [],
+            is_correct: userAnsRaw.is_correct,
+            marks_obtained: userAnsRaw.marks_obtained
+          };
+
+          if (userAnsRaw.selected_options && userAnsRaw.selected_options.length > 0) {
+            status = userAnsRaw.is_correct ? 'correct' : 'incorrect';
           } else {
             status = 'skipped'; // Row exists but no option selected
           }
         }
 
         return {
-          question: q as Question,
-          answer: userAns || null,
+          question: q,
+          answer: answerObj,
           status
         };
       });
 
+      // Sort by status for better visibility? Or keep ID order.
+      // Let's sort by: Correct/Incorrect first, then Skipped/Unvisited
+      // Or just keep database order. Let's keep it simple.
       setMergedData(merged);
 
     } catch (error) {
       console.error('Error fetching details:', error);
+      toast.error("Failed to load explanations");
     } finally {
       setIsLoading(false);
     }
@@ -154,13 +212,12 @@ export default function StudentTestExplanations() {
   // Filter Logic
   const filteredList = useMemo(() => {
     return mergedData.filter(item => {
-      // 1. First check: Are we showing unattempted?
-      // If showUnattempted is FALSE, we hide 'skipped' and 'unvisited'
+      // 1. Check Unattempted Visibility
       if (!showUnattempted) {
         if (item.status === 'skipped' || item.status === 'unvisited') return false;
       }
 
-      // 2. Then check specific status tab
+      // 2. Check Tab Filter
       if (filterType === 'all') return true;
       if (filterType === 'correct') return item.status === 'correct';
       if (filterType === 'incorrect') return item.status === 'incorrect';
@@ -190,9 +247,8 @@ export default function StudentTestExplanations() {
     <StudentLayout>
       <div className="container max-w-6xl mx-auto p-4 md:p-6 space-y-6">
         
-        {/* HEADER & CONTROLS */}
+        {/* HEADER */}
         <div className="sticky top-0 z-20 bg-background/95 backdrop-blur py-4 border-b space-y-4">
-          
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -205,7 +261,7 @@ export default function StudentTestExplanations() {
               <h1 className="text-2xl font-bold">{testInfo?.title}</h1>
             </div>
 
-            {/* View Toggle: All vs Attempted */}
+            {/* View Mode Toggle */}
             <div className="flex items-center gap-4 bg-muted/30 p-2 rounded-lg border">
               <div className="flex items-center gap-2 text-sm font-medium px-2">
                 {showUnattempted ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4 text-muted-foreground" />}
@@ -235,7 +291,7 @@ export default function StudentTestExplanations() {
           <Tabs defaultValue="all" value={filterType} onValueChange={(v) => setFilterType(v as any)}>
             <TabsList className="grid grid-cols-3 w-full md:w-[400px]">
               <TabsTrigger value="all">
-                All {showUnattempted ? '' : 'Attempted'}
+                All
               </TabsTrigger>
               <TabsTrigger value="correct" className="text-green-600">Correct</TabsTrigger>
               <TabsTrigger value="incorrect" className="text-red-600">Incorrect</TabsTrigger>
@@ -245,7 +301,7 @@ export default function StudentTestExplanations() {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           
-          {/* MAIN LIST */}
+          {/* QUESTIONS LIST */}
           <div className="lg:col-span-8 space-y-8">
             {filteredList.length === 0 ? (
               <Card className="p-12 text-center text-muted-foreground">
@@ -266,12 +322,11 @@ export default function StudentTestExplanations() {
 
                 return (
                   <Card key={question.id} id={`q-${question.id}`} 
-                    className="scroll-mt-36 overflow-hidden border-l-4 shadow-sm"
+                    className="scroll-mt-48 overflow-hidden border-l-4 shadow-sm transition-all"
                     style={{ 
                       borderLeftColor: isCorrect ? '#22c55e' : isSkipped ? '#94a3b8' : '#ef4444' 
                     }}
                   >
-                    {/* Question Header */}
                     <CardHeader className="bg-muted/30 pb-4 py-3">
                       <div className="flex justify-between items-start gap-4">
                         <div className="flex items-center gap-3">
@@ -305,14 +360,12 @@ export default function StudentTestExplanations() {
                     </CardHeader>
                     
                     <CardContent className="pt-6 space-y-6">
-                      {/* Question Text */}
                       <div className="text-lg font-medium leading-relaxed">
                         {question.question_text}
                       </div>
 
-                      {/* Options Grid */}
                       <div className="grid gap-3">
-                        {question.question_options.map((option) => {
+                        {question.question_options?.map((option) => {
                           const isSelected = selectedIds.includes(option.id);
                           const isCorrectOption = option.is_correct;
                           
@@ -357,7 +410,6 @@ export default function StudentTestExplanations() {
                         })}
                       </div>
 
-                      {/* Explanation Box */}
                       <div className="relative overflow-hidden rounded-xl border border-blue-100 bg-blue-50/30 dark:bg-blue-950/10 dark:border-blue-900">
                         <div className="absolute top-0 left-0 w-1 h-full bg-blue-500/50" />
                         <div className="p-5">
@@ -383,13 +435,13 @@ export default function StudentTestExplanations() {
             )}
           </div>
 
-          {/* RIGHT SIDEBAR: NAVIGATOR */}
+          {/* NAVIGATOR SIDEBAR */}
           <div className="hidden lg:block lg:col-span-4">
             <div className="sticky top-40 space-y-4">
               <Card>
                 <CardHeader className="pb-3 bg-muted/20">
                   <CardTitle className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
-                    Question Navigator
+                    Navigator
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-4">
@@ -397,8 +449,6 @@ export default function StudentTestExplanations() {
                     <div className="grid grid-cols-5 gap-2">
                       {mergedData.map((item, idx) => {
                         const { status, question } = item;
-                        
-                        // Determine if button is disabled based on view settings
                         const isHiddenByToggle = !showUnattempted && (status === 'skipped' || status === 'unvisited');
                         
                         let btnColor = "bg-muted text-muted-foreground border-transparent hover:bg-muted-foreground/20"; 
@@ -424,35 +474,24 @@ export default function StudentTestExplanations() {
                     </div>
                   </ScrollArea>
                   
-                  {/* Legend */}
                   <div className="mt-6 space-y-2 text-xs text-muted-foreground border-t pt-4">
                     <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-2">
-                        <div className="w-3 h-3 bg-green-100 border border-green-200 rounded" /> Correct
-                      </span>
+                      <span className="flex items-center gap-2"><div className="w-3 h-3 bg-green-100 border border-green-200 rounded" /> Correct</span>
                       <span className="font-mono">{mergedData.filter(d => d.status === 'correct').length}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-2">
-                        <div className="w-3 h-3 bg-red-100 border border-red-200 rounded" /> Incorrect
-                      </span>
+                      <span className="flex items-center gap-2"><div className="w-3 h-3 bg-red-100 border border-red-200 rounded" /> Incorrect</span>
                       <span className="font-mono">{mergedData.filter(d => d.status === 'incorrect').length}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-2">
-                        <div className="w-3 h-3 bg-muted border border-muted-foreground/30 rounded" /> Skipped/Unseen
-                      </span>
+                      <span className="flex items-center gap-2"><div className="w-3 h-3 bg-muted border border-muted-foreground/30 rounded" /> Skipped/Unseen</span>
                       <span className="font-mono">{mergedData.filter(d => d.status === 'skipped' || d.status === 'unvisited').length}</span>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Button 
-                variant="outline" 
-                className="w-full" 
-                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-              >
+              <Button variant="outline" className="w-full" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
                 <ArrowUp className="w-4 h-4 mr-2" /> Back to Top
               </Button>
             </div>

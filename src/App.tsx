@@ -35,6 +35,7 @@ import AdminAnalytics from "./pages/admin/AdminAnalytics";
 import AdminAntiCheatLogs from "./pages/admin/AdminAntiCheatLogs";
 import AdminProfile from "./pages/admin/AdminProfile";
 import NotFound from "./pages/NotFound";
+import StudentTestExplanations from "./pages/student/StudentTestExplanations";
 
 const queryClient = new QueryClient();
 
@@ -63,7 +64,7 @@ const App = () => (
             <Route path="/student/leaderboard" element={<ProtectedRoute allowedRoles={['student']}><StudentLeaderboard /></ProtectedRoute>} />
             <Route path="/student/analytics" element={<ProtectedRoute allowedRoles={['student']}><StudentAnalytics /></ProtectedRoute>} />
             <Route path="/student/profile" element={<ProtectedRoute allowedRoles={['student']}><StudentProfile /></ProtectedRoute>} />
-
+            <Route path="/student/results/:id/explanations" element={<ProtectedRoute allowedRoles={['student']}><StudentTestExplanations /></ProtectedRoute>} />
             {/* Mentor Routes - Share admin components */}
             <Route path="/mentor/dashboard" element={<ProtectedRoute allowedRoles={['mentor']}><AdminDashboard /></ProtectedRoute>} />
             <Route path="/mentor/subjects" element={<ProtectedRoute allowedRoles={['mentor']}><AdminSubjects /></ProtectedRoute>} />
