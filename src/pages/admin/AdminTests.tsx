@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,11 +36,10 @@ import {
   UserCircle,
   ShieldCheck,
   Edit,
-  Layers, // Icon for Bulk Assign
+  Layers,
 } from 'lucide-react';
 
 // --- Interfaces ---
-
 interface Test {
   id: string;
   title: string;
@@ -55,7 +54,6 @@ interface Test {
   created_at: string;
   subject_id: string | null;
   subjects?: { name: string } | null;
-  // Additional fields for Edit mapping
   max_attempts?: number;
   shuffle_questions?: boolean;
   shuffle_options?: boolean;
@@ -113,11 +111,12 @@ export default function AdminTests() {
   
   // --- State ---
   const [tests, setTests] = useState<Test[]>([]);
-  const [questions, setQuestions] = useState<Question[]>([]);
+  const [questions, setQuestions] = useState<Question[]>([]); // This now holds dynamically fetched questions
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isQuestionsLoading, setIsQuestionsLoading] = useState(false); // Loading state for questions tab
   const [searchTerm, setSearchTerm] = useState('');
   
   // Filters
@@ -128,7 +127,7 @@ export default function AdminTests() {
   // Dialogs & Selection
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
-  const [isBulkAssignDialogOpen, setIsBulkAssignDialogOpen] = useState(false); // New state for bulk assign
+  const [isBulkAssignDialogOpen, setIsBulkAssignDialogOpen] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   
   const [previewTestId, setPreviewTestId] = useState<string>('');
@@ -170,42 +169,48 @@ export default function AdminTests() {
     end_time: '',
   });
 
-  // --- Effects ---
+  // --- Initial Data Fetch (Only Light Data) ---
   useEffect(() => {
-    fetchData();
+    fetchInitialData();
   }, []);
 
+  // --- Dynamic Question Fetching ---
+  // Triggers when Subject, Topic, or Create Dialog Open changes
+  useEffect(() => {
+    if (isCreateDialogOpen) {
+      fetchFilteredQuestions();
+    }
+  }, [formData.subject_id, questionFilterTopic, isCreateDialogOpen]);
+
+  // Update filtered topics when subject changes
   useEffect(() => {
     if (formData.subject_id) {
       setFilteredTopicsForQuestions(topics.filter(t => t.subject_id === formData.subject_id));
     } else {
       setFilteredTopicsForQuestions([]);
     }
-    setQuestionFilterTopic('all');
+    // When subject changes, reset topic filter to 'all' so we fetch all topics for that subject
+    if (formData.subject_id && questionFilterTopic !== 'all') {
+      setQuestionFilterTopic('all');
+    }
   }, [formData.subject_id, topics]);
 
-  // --- Functions ---
-  const fetchData = async () => {
+  const fetchInitialData = async () => {
     try {
-      const [testsRes, questionsRes, subjectsRes, topicsRes, studentsRes] = await Promise.all([
+      const [testsRes, subjectsRes, topicsRes, studentsRes] = await Promise.all([
         supabase.from('tests').select('*, subjects(name)').order('created_at', { ascending: false }),
-        supabase.from('questions').select('*, subjects(name), topics(name)').eq('is_active', true),
+        // REMOVED: Initial massive questions fetch
         supabase.from('subjects').select('*').eq('is_active', true),
         supabase.from('topics').select('*').eq('is_active', true),
         supabase.from('profiles').select('*'),
       ]);
 
       if (testsRes.data) setTests(testsRes.data);
-      if (questionsRes.data) setQuestions(questionsRes.data);
       if (subjectsRes.data) setSubjects(subjectsRes.data);
       if (topicsRes.data) setTopics(topicsRes.data);
       
       if (studentsRes.data) {
-        const { data: roles } = await supabase
-          .from('user_roles')
-          .select('user_id')
-          .eq('role', 'student');
-        
+        const { data: roles } = await supabase.from('user_roles').select('user_id').eq('role', 'student');
         const studentUserIds = roles?.map(r => r.user_id) || [];
         const studentProfiles = studentsRes.data.filter(p => studentUserIds.includes(p.user_id));
         setStudents(studentProfiles.map(p => ({ id: p.id, user_id: p.user_id, full_name: p.full_name, email: p.email })));
@@ -215,6 +220,62 @@ export default function AdminTests() {
       toast.error('Failed to load data');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // --- The New Dynamic Fetch Function ---
+  const fetchFilteredQuestions = async () => {
+    setIsQuestionsLoading(true);
+    try {
+      let query = supabase
+        .from('questions')
+        .select('*, subjects(name), topics(name)')
+        .eq('is_active', true);
+
+      // 1. Filter by Subject
+      if (formData.subject_id) {
+        query = query.eq('subject_id', formData.subject_id);
+      }
+
+      // 2. Filter by Topic (if selected)
+      if (questionFilterTopic && questionFilterTopic !== 'all') {
+        query = query.eq('topic_id', questionFilterTopic);
+      }
+
+      // Limit results to avoid crashing (e.g. 500 max per filtered view)
+      query = query.limit(500);
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      // 3. IMPORTANT: If editing, we MUST also fetch the questions that are already selected
+      // even if they don't match the current subject/topic filter.
+      let combinedQuestions = data || [];
+
+      if (isEditMode && selectedQuestions.length > 0) {
+        const missingIds = selectedQuestions.filter(id => !combinedQuestions.find(q => q.id === id));
+        
+        if (missingIds.length > 0) {
+          const { data: missingQuestions } = await supabase
+            .from('questions')
+            .select('*, subjects(name), topics(name)')
+            .in('id', missingIds);
+          
+          if (missingQuestions) {
+            combinedQuestions = [...combinedQuestions, ...missingQuestions];
+          }
+        }
+      }
+
+      // Remove duplicates just in case
+      const uniqueQuestions = Array.from(new Map(combinedQuestions.map(q => [q.id, q])).values());
+      setQuestions(uniqueQuestions);
+
+    } catch (error) {
+      console.error('Error fetching filtered questions:', error);
+      toast.error('Failed to load questions');
+    } finally {
+      setIsQuestionsLoading(false);
     }
   };
 
@@ -251,9 +312,9 @@ export default function AdminTests() {
       end_time: '',
     });
     setSelectedQuestions([]);
+    setQuestionFilterTopic('all');
   };
 
-  // --- Handler: Edit Test (Populate Form) ---
   const handleEditTest = async (test: Test) => {
     setIsEditMode(true);
     setEditingTestId(test.id);
@@ -294,19 +355,30 @@ export default function AdminTests() {
       end_time: formatDateTime(test.end_time),
     });
 
+    // Fetch existing assigned questions
     const { data: existingQuestions } = await supabase
       .from('test_questions')
       .select('question_id')
       .eq('test_id', test.id);
 
     if (existingQuestions) {
-      setSelectedQuestions(existingQuestions.map((q: any) => q.question_id));
+      const ids = existingQuestions.map((q: any) => q.question_id);
+      setSelectedQuestions(ids);
+    }
+
+    // Set filters to match the test so the user sees relevant questions immediately
+    if (test.subject_id) {
+        setQuestionFilterTopic('all'); 
+        // Note: The useEffect will trigger fetchFilteredQuestions because formData.subject_id changes here
     }
 
     setIsCreateDialogOpen(true);
   };
 
-  // --- Handler: Update Existing Test ---
+  // ... Update Test, Create Test, Assign logic remains mostly the same ...
+  // Only the logic that calculated totalMarks needs to ensure it can find the questions
+  // But since we fetch selected questions in fetchFilteredQuestions, it should work.
+
   const handleUpdateTest = async () => {
     if (!editingTestId) return;
     if (!formData.title || selectedQuestions.length === 0) {
@@ -315,10 +387,15 @@ export default function AdminTests() {
     }
 
     try {
-      const totalMarks = selectedQuestions.reduce((sum, qId) => {
-        const q = questions.find(q => q.id === qId);
-        return sum + (q?.marks || 0);
-      }, 0);
+      // Calculate marks. We might need to fetch the specific questions if they aren't in the current 'questions' view
+      // But for simplicity, we rely on the backend or current view. 
+      // Robust way: fetch marks for selected IDs from DB
+      const { data: marksData } = await supabase
+        .from('questions')
+        .select('marks')
+        .in('id', selectedQuestions);
+        
+      const totalMarks = marksData?.reduce((sum, q) => sum + (q.marks || 0), 0) || 0;
 
       const { error: updateError } = await supabase
         .from('tests')
@@ -356,14 +433,13 @@ export default function AdminTests() {
       toast.success('Test updated successfully');
       setIsCreateDialogOpen(false);
       resetForm();
-      fetchData();
+      fetchInitialData(); // Refresh list
     } catch (error: any) {
       console.error('Error updating test:', error);
       toast.error(error.message || 'Failed to update test');
     }
   };
 
-  // --- Handler: Create New Test ---
   const handleCreateTest = async () => {
     if (!formData.title || selectedQuestions.length === 0) {
       toast.error('Please fill in the title and select at least one question');
@@ -371,10 +447,13 @@ export default function AdminTests() {
     }
 
     try {
-      const totalMarks = selectedQuestions.reduce((sum, qId) => {
-        const q = questions.find(q => q.id === qId);
-        return sum + (q?.marks || 0);
-      }, 0);
+      // Calculate marks robustly
+      const { data: marksData } = await supabase
+        .from('questions')
+        .select('marks')
+        .in('id', selectedQuestions);
+        
+      const totalMarks = marksData?.reduce((sum, q) => sum + (q.marks || 0), 0) || 0;
 
       const { data: newTest, error: testError } = await supabase
         .from('tests')
@@ -407,36 +486,31 @@ export default function AdminTests() {
       toast.success('Test created successfully');
       setIsCreateDialogOpen(false);
       resetForm();
-      fetchData();
+      fetchInitialData();
     } catch (error: any) {
       console.error('Error creating test:', error);
       toast.error(error.message || 'Failed to create test');
     }
   };
 
-  // --- Handler: Single Test Assignment ---
+  // ... Assign logic same as before ...
   const handleAssignTest = async () => {
     if (!selectedTest || selectedStudents.length === 0) {
       toast.error('Please select students to assign');
       return;
     }
-
     try {
-      // Use upsert or delete-then-insert. Upsert is safer for "Assign" semantics.
       const assignments = selectedStudents.map(studentUserId => ({
         test_id: selectedTest.id,
         user_id: studentUserId,
         assigned_by: user?.id,
         is_completed: false,
       }));
-
-      // We perform upsert based on (test_id, user_id) unique constraint usually
       const { error } = await supabase
         .from('test_assignments')
         .upsert(assignments, { onConflict: 'test_id,user_id' });
 
       if (error) throw error;
-
       toast.success(`Test assigned to ${selectedStudents.length} student(s)`);
       setIsAssignDialogOpen(false);
       setSelectedStudents([]);
@@ -447,14 +521,11 @@ export default function AdminTests() {
     }
   };
 
-  // --- Handler: Bulk Assign Tests ---
   const handleBulkAssignTests = async () => {
     if (selectedStudents.length === 0) {
       toast.error('Please select at least one student.');
       return;
     }
-
-    // Filter for Active Admin Tests (Excluding weak areas)
     const adminTests = tests.filter(test => {
       const isStudentGenerated = test.test_type === 'weak_areas' || test.title.includes('Weak Areas Test');
       return test.is_active && !isStudentGenerated;
@@ -464,12 +535,9 @@ export default function AdminTests() {
       toast.error('No active admin tests found to assign.');
       return;
     }
-
     try {
       setIsLoading(true);
       const assignments = [];
-
-      // Create an assignment entry for every combination of student and active admin test
       for (const studentId of selectedStudents) {
         for (const test of adminTests) {
           assignments.push({
@@ -480,14 +548,11 @@ export default function AdminTests() {
           });
         }
       }
-
-      // Bulk upsert to avoid duplicate key errors if some are already assigned
       const { error } = await supabase
         .from('test_assignments')
         .upsert(assignments, { onConflict: 'test_id,user_id' });
 
       if (error) throw error;
-
       toast.success(`Successfully assigned ${adminTests.length} tests to ${selectedStudents.length} student(s).`);
       setIsBulkAssignDialogOpen(false);
       setSelectedStudents([]);
@@ -505,7 +570,7 @@ export default function AdminTests() {
       const { error } = await supabase.from('tests').delete().eq('id', testId);
       if (error) throw error;
       toast.success('Test deleted successfully');
-      fetchData();
+      fetchInitialData();
     } catch (error: any) {
       console.error('Error deleting test:', error);
       toast.error(error.message || 'Failed to delete test');
@@ -521,13 +586,12 @@ export default function AdminTests() {
       
       if (error) throw error;
       toast.success(`Test ${test.is_active ? 'deactivated' : 'activated'}`);
-      fetchData();
+      fetchInitialData();
     } catch (error: any) {
       toast.error(error.message || 'Failed to update test');
     }
   };
 
-  // --- Filtering ---
   const filteredTests = tests.filter(test => {
     const matchesSearch = test.title.toLowerCase().includes(searchTerm.toLowerCase());
     const isStudentGenerated = test.test_type === 'weak_areas' || test.title.includes('Weak Areas Test');
@@ -542,18 +606,11 @@ export default function AdminTests() {
     return matchesSearch && matchesSource;
   });
 
-  const filteredQuestions = questions.filter(q => {
-    const matchesSubject = !formData.subject_id || q.subject_id === formData.subject_id;
-    const matchesTopic = questionFilterTopic === 'all' || q.topic_id === questionFilterTopic;
-    return matchesSubject && matchesTopic;
-  });
-
   const handlePreviewTest = (testId: string) => {
     setPreviewTestId(testId);
     setIsPreviewOpen(true);
   };
 
-  // --- Loading State ---
   if (isLoading) {
     return (
       <AdminLayout role={role}>
@@ -564,7 +621,6 @@ export default function AdminTests() {
     );
   }
 
-  // --- JSX Render ---
   return (
     <AdminLayout role={role}>
       <div className="p-6 space-y-6">
@@ -580,11 +636,10 @@ export default function AdminTests() {
           </div>
           
           <div className="flex gap-2">
-            {/* BULK ASSIGN BUTTON */}
             <Button 
               variant="outline" 
               onClick={() => {
-                setSelectedStudents([]); // Clear selection when opening
+                setSelectedStudents([]);
                 setIsBulkAssignDialogOpen(true);
               }}
             >
@@ -602,6 +657,9 @@ export default function AdminTests() {
               <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
                 <DialogHeader>
                   <DialogTitle>{isEditMode ? 'Edit Test' : 'Create New Test'}</DialogTitle>
+                  <DialogDescription>
+                    Fill in the details below to create or update a test.
+                  </DialogDescription>
                 </DialogHeader>
                 <ScrollArea className="max-h-[calc(90vh-120px)] pr-4">
                   <Tabs defaultValue="basic" className="w-full">
@@ -729,7 +787,7 @@ export default function AdminTests() {
                     <TabsContent value="questions" className="space-y-4 mt-4">
                       <div className="flex items-center justify-between flex-wrap gap-2">
                         <p className="text-sm text-muted-foreground">
-                          Selected: {selectedQuestions.length} questions | Available: {filteredQuestions.length}
+                          Selected: {selectedQuestions.length} questions
                         </p>
                         <div className="flex gap-2">
                           <Badge variant="outline">Easy: {formData.easy_percentage}%</Badge>
@@ -759,11 +817,11 @@ export default function AdminTests() {
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            const allIds = filteredQuestions.map(q => q.id);
+                            const allIds = questions.map(q => q.id); // Select from currently visible
                             setSelectedQuestions([...new Set([...selectedQuestions, ...allIds])]);
                           }}
                         >
-                          Select All
+                          Select Page
                         </Button>
                         <Button
                           variant="outline"
@@ -775,12 +833,16 @@ export default function AdminTests() {
                       </div>
 
                       <ScrollArea className="h-[280px] border rounded-lg p-4">
-                        {filteredQuestions.length === 0 ? (
+                        {isQuestionsLoading ? (
+                           <div className="flex items-center justify-center h-full">
+                             <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                           </div>
+                        ) : questions.length === 0 ? (
                           <div className="text-center text-muted-foreground py-8">
-                            No questions found. {!formData.subject_id && 'Select a subject first.'}
+                            No questions found. {!formData.subject_id && 'Select a subject to load questions.'}
                           </div>
                         ) : (
-                          filteredQuestions.map(q => (
+                          questions.map(q => (
                             <div
                               key={q.id}
                               className="flex items-start gap-3 p-3 border-b last:border-0 hover:bg-muted/50"
@@ -820,62 +882,39 @@ export default function AdminTests() {
 
                     {/* 3. Settings Tab */}
                     <TabsContent value="settings" className="space-y-4 mt-4">
+                      {/* ... settings content same as before ... */}
                       <div className="grid grid-cols-2 gap-4">
                         <div className="flex items-center justify-between p-3 border rounded-lg">
                           <Label>Shuffle Questions</Label>
-                          <Switch
-                            checked={formData.shuffle_questions}
-                            onCheckedChange={c => setFormData({ ...formData, shuffle_questions: c })}
-                          />
+                          <Switch checked={formData.shuffle_questions} onCheckedChange={c => setFormData({...formData, shuffle_questions: c})} />
                         </div>
                         <div className="flex items-center justify-between p-3 border rounded-lg">
                           <Label>Shuffle Options</Label>
-                          <Switch
-                            checked={formData.shuffle_options}
-                            onCheckedChange={c => setFormData({ ...formData, shuffle_options: c })}
-                          />
+                          <Switch checked={formData.shuffle_options} onCheckedChange={c => setFormData({...formData, shuffle_options: c})} />
                         </div>
                         <div className="flex items-center justify-between p-3 border rounded-lg">
                           <Label>Show Results</Label>
-                          <Switch
-                            checked={formData.show_results}
-                            onCheckedChange={c => setFormData({ ...formData, show_results: c })}
-                          />
+                          <Switch checked={formData.show_results} onCheckedChange={c => setFormData({...formData, show_results: c})} />
                         </div>
                         <div className="flex items-center justify-between p-3 border rounded-lg">
                           <Label>Show Answers</Label>
-                          <Switch
-                            checked={formData.show_answers}
-                            onCheckedChange={c => setFormData({ ...formData, show_answers: c })}
-                          />
+                          <Switch checked={formData.show_answers} onCheckedChange={c => setFormData({...formData, show_answers: c})} />
                         </div>
-                        <div className="flex items-center justify-between p-3 border rounded-lg">
+                         <div className="flex items-center justify-between p-3 border rounded-lg">
                           <Label>Allow Navigation</Label>
-                          <Switch
-                            checked={formData.allow_navigation}
-                            onCheckedChange={c => setFormData({ ...formData, allow_navigation: c })}
-                          />
+                          <Switch checked={formData.allow_navigation} onCheckedChange={c => setFormData({...formData, allow_navigation: c})} />
                         </div>
-                        <div className="flex items-center justify-between p-3 border rounded-lg">
+                         <div className="flex items-center justify-between p-3 border rounded-lg">
                           <Label>Allow Review</Label>
-                          <Switch
-                            checked={formData.allow_review}
-                            onCheckedChange={c => setFormData({ ...formData, allow_review: c })}
-                          />
+                          <Switch checked={formData.allow_review} onCheckedChange={c => setFormData({...formData, allow_review: c})} />
                         </div>
-                        <div className="flex items-center justify-between p-3 border rounded-lg">
+                         <div className="flex items-center justify-between p-3 border rounded-lg">
                           <Label>Question by Question</Label>
-                          <Switch
-                            checked={formData.question_by_question}
-                            onCheckedChange={c => setFormData({ ...formData, question_by_question: c })}
-                          />
+                          <Switch checked={formData.question_by_question} onCheckedChange={c => setFormData({...formData, question_by_question: c})} />
                         </div>
-                        <div className="flex items-center justify-between p-3 border rounded-lg">
+                         <div className="flex items-center justify-between p-3 border rounded-lg">
                           <Label>Auto Submit</Label>
-                          <Switch
-                            checked={formData.auto_submit}
-                            onCheckedChange={c => setFormData({ ...formData, auto_submit: c })}
-                          />
+                          <Switch checked={formData.auto_submit} onCheckedChange={c => setFormData({...formData, auto_submit: c})} />
                         </div>
                       </div>
                     </TabsContent>
@@ -954,7 +993,8 @@ export default function AdminTests() {
           </div>
         </div>
 
-        {/* Search and Filters */}
+        {/* ... Search, Filters, Grid, and Other Dialogs remain mostly identical ... */}
+        {/* Only need to render the grid and other components which don't affect this logic */}
         <div className="flex flex-col md:flex-row gap-4">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -1044,7 +1084,6 @@ export default function AdminTests() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        {/* EDIT BUTTON */}
                         {role === 'admin' && (
                           <Button
                             className="text-[black]"
@@ -1071,7 +1110,7 @@ export default function AdminTests() {
                           size="sm"
                           onClick={() => {
                             setSelectedTest(test);
-                            setSelectedStudents([]); // Clear previous selections
+                            setSelectedStudents([]);
                             setIsAssignDialogOpen(true);
                           }}
                         >
@@ -1104,17 +1143,17 @@ export default function AdminTests() {
           )}
         </div>
 
-        {/* Assign Dialog (Single Test) */}
+        {/* ... Remaining Dialogs (Assign, Bulk Assign, Preview) ... */}
+        {/* Same as previous, no logic change needed there */}
         <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Assign Test to Students</DialogTitle>
+              <DialogDescription>
+                Select students to assign <strong>{selectedTest?.title}</strong> to.
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Assigning: <strong>{selectedTest?.title}</strong>
-              </p>
-
               <div className="flex items-center gap-3 px-4 py-2 bg-muted/50 rounded-lg border">
                 <Checkbox
                   id="select-all"
@@ -1168,8 +1207,7 @@ export default function AdminTests() {
           </DialogContent>
         </Dialog>
 
-        {/* Bulk Assign Dialog (New Feature) */}
-        <Dialog open={isBulkAssignDialogOpen} onOpenChange={setIsBulkAssignDialogOpen}>
+         <Dialog open={isBulkAssignDialogOpen} onOpenChange={setIsBulkAssignDialogOpen}>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>Bulk Assign Admin Tests</DialogTitle>
@@ -1232,8 +1270,7 @@ export default function AdminTests() {
             </div>
           </DialogContent>
         </Dialog>
-        
-        {/* Test Preview */}
+
         <TestPreview 
           testId={previewTestId} 
           isOpen={isPreviewOpen} 
