@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StudentLayout } from '@/components/layout/StudentLayout';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
@@ -19,7 +20,8 @@ import {
   Target,
   Star,
   Play,
-  Loader2
+  Loader2,
+  BookOpen
 } from 'lucide-react';
 
 interface AvailableTest {
@@ -154,6 +156,18 @@ export default function StudentTests() {
     }
   };
 
+  // Helper function to group tests by subject
+  const groupTestsBySubject = <T extends { subject_name: string }>(tests: T[]) => {
+    return tests.reduce((groups, test) => {
+      const subject = test.subject_name;
+      if (!groups[subject]) {
+        groups[subject] = [];
+      }
+      groups[subject].push(test);
+      return groups;
+    }, {} as Record<string, T[]>);
+  };
+
   if (isLoading) {
     return (
       <StudentLayout>
@@ -163,6 +177,11 @@ export default function StudentTests() {
       </StudentLayout>
     );
   }
+
+  // Group data
+  const groupedAvailable = groupTestsBySubject(availableTests);
+  const groupedInProgress = groupTestsBySubject(inProgressTests);
+  const groupedCompleted = groupTestsBySubject(completedTests);
 
   return (
     <StudentLayout>
@@ -243,7 +262,7 @@ export default function StudentTests() {
             </TabsTrigger>
           </TabsList>
 
-          {/* Available Tests */}
+          {/* Available Tests - Grouped by Subject */}
           <TabsContent value="available" className="space-y-4">
             {availableTests.length === 0 ? (
               <Card variant="default">
@@ -254,50 +273,68 @@ export default function StudentTests() {
                 </CardContent>
               </Card>
             ) : (
-              availableTests.map((test) => (
-                <Card key={test.id} variant="interactive">
-                  <CardContent className="p-6">
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-lg font-bold">{test.title}</h3>
+              <Accordion type="multiple" defaultValue={Object.keys(groupedAvailable)} className="space-y-4">
+                {Object.entries(groupedAvailable).map(([subject, tests]) => (
+                  <AccordionItem key={subject} value={subject} className="border rounded-lg bg-card px-4">
+                    <AccordionTrigger className="hover:no-underline py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                          <BookOpen className="w-4 h-4 text-primary" />
                         </div>
-                        <p className="text-sm text-muted-foreground mb-3">{test.subject_name}</p>
-                        <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Target size={14} />
-                            {test.total_questions} questions
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Clock size={14} />
-                            {test.duration_minutes} mins
-                          </span>
-                          {test.due_date && (
-                            <span className="flex items-center gap-1">
-                              <Calendar size={14} />
-                              Due: {format(new Date(test.due_date), 'MMM d, yyyy')}
-                            </span>
-                          )}
-                          <span className="flex items-center gap-1">
-                            <Star size={14} />
-                            Attempts: {test.attempts_used}/{test.max_attempts}
-                          </span>
-                        </div>
+                        <span className="text-lg font-semibold">{subject}</span>
+                        <Badge variant="secondary" className="ml-2">{tests.length} Tests</Badge>
                       </div>
-                      <Link to={`/student/test/${test.id}`}>
-                        <Button variant="game" size="lg">
-                          <Play size={18} />
-                          Start Test
-                        </Button>
-                      </Link>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
+                    </AccordionTrigger>
+                    <AccordionContent className="pb-4 pt-2">
+                      <div className="space-y-4">
+                        {tests.map((test) => (
+                          <Card key={test.id} variant="interactive" className="border-l-4 border-l-primary">
+                            <CardContent className="p-6">
+                              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-3 mb-2">
+                                    <h3 className="text-lg font-bold">{test.title}</h3>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                                    <span className="flex items-center gap-1">
+                                      <Target size={14} />
+                                      {test.total_questions} questions
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                      <Clock size={14} />
+                                      {test.duration_minutes} mins
+                                    </span>
+                                    {test.due_date && (
+                                      <span className="flex items-center gap-1">
+                                        <Calendar size={14} />
+                                        Due: {format(new Date(test.due_date), 'MMM d, yyyy')}
+                                      </span>
+                                    )}
+                                    <span className="flex items-center gap-1">
+                                      <Star size={14} />
+                                      Attempts: {test.attempts_used}/{test.max_attempts}
+                                    </span>
+                                  </div>
+                                </div>
+                                <Link to={`/student/test/${test.id}`}>
+                                  <Button variant="game" size="lg">
+                                    <Play size={18} />
+                                    Start Test
+                                  </Button>
+                                </Link>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
             )}
           </TabsContent>
 
-          {/* In Progress */}
+          {/* In Progress Tests - Grouped by Subject */}
           <TabsContent value="inProgress" className="space-y-4">
             {inProgressTests.length === 0 ? (
               <Card variant="default">
@@ -308,40 +345,58 @@ export default function StudentTests() {
                 </CardContent>
               </Card>
             ) : (
-              inProgressTests.map((test) => (
-                <Card key={test.id} variant="gameHighlight">
-                  <CardContent className="p-6">
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                      <div className="flex-1">
-                        <h3 className="text-lg font-bold mb-2">{test.title}</h3>
-                        <p className="text-sm text-muted-foreground mb-3">{test.subject_name}</p>
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span>Progress</span>
-                            <span className="font-medium">{test.progress}%</span>
-                          </div>
-                          <div className="h-2 bg-muted rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-gradient-to-r from-game-gold to-game-star rounded-full"
-                              style={{ width: `${test.progress}%` }}
-                            />
-                          </div>
-                        </div>
+              <Accordion type="multiple" defaultValue={Object.keys(groupedInProgress)} className="space-y-4">
+                {Object.entries(groupedInProgress).map(([subject, tests]) => (
+                   <AccordionItem key={subject} value={subject} className="border rounded-lg bg-card px-4">
+                   <AccordionTrigger className="hover:no-underline py-4">
+                     <div className="flex items-center gap-3">
+                       <div className="w-8 h-8 rounded-full bg-game-gold/10 flex items-center justify-center">
+                         <Timer className="w-4 h-4 text-game-gold" />
+                       </div>
+                       <span className="text-lg font-semibold">{subject}</span>
+                       <Badge variant="outline" className="ml-2 border-game-gold text-game-gold">{tests.length} Active</Badge>
+                     </div>
+                   </AccordionTrigger>
+                    <AccordionContent className="pb-4 pt-2">
+                      <div className="space-y-4">
+                        {tests.map((test) => (
+                          <Card key={test.id} variant="gameHighlight">
+                            <CardContent className="p-6">
+                              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                                <div className="flex-1">
+                                  <h3 className="text-lg font-bold mb-2">{test.title}</h3>
+                                  <div className="space-y-2">
+                                    <div className="flex justify-between text-sm">
+                                      <span>Progress</span>
+                                      <span className="font-medium">{test.progress}%</span>
+                                    </div>
+                                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                      <div 
+                                        className="h-full bg-gradient-to-r from-game-gold to-game-star rounded-full"
+                                        style={{ width: `${test.progress}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                                <Link to={`/student/test/${test.id}`}>
+                                  <Button variant="game" size="lg">
+                                    <ArrowRight size={18} />
+                                    Continue
+                                  </Button>
+                                </Link>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
                       </div>
-                      <Link to={`/student/test/${test.id}`}>
-                        <Button variant="game" size="lg">
-                          <ArrowRight size={18} />
-                          Continue
-                        </Button>
-                      </Link>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
             )}
           </TabsContent>
 
-          {/* Completed */}
+          {/* Completed Tests - Grouped by Subject */}
           <TabsContent value="completed" className="space-y-4">
             {completedTests.length === 0 ? (
               <Card variant="default">
@@ -352,46 +407,64 @@ export default function StudentTests() {
                 </CardContent>
               </Card>
             ) : (
-              completedTests.map((test, index) => (
-                <Card key={`${test.attempt_id}-${index}`} variant="default">
-                  <CardContent className="p-6">
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-lg font-bold">{test.title}</h3>
-                          <Badge 
-                            variant="outline" 
-                            className={test.passed 
-                              ? 'bg-game-pipe/20 text-game-pipe border-game-pipe/30' 
-                              : 'bg-destructive/20 text-destructive border-destructive/30'
-                            }
-                          >
-                            {test.passed ? 'Passed' : 'Failed'}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground mb-2">{test.subject_name}</p>
-                        <p className="text-sm text-muted-foreground flex items-center gap-1">
-                          <Calendar size={14} />
-                          Completed: {format(new Date(test.date), 'MMM d, yyyy')}
-                        </p>
+              <Accordion type="multiple" defaultValue={Object.keys(groupedCompleted)} className="space-y-4">
+                {Object.entries(groupedCompleted).map(([subject, tests]) => (
+                   <AccordionItem key={subject} value={subject} className="border rounded-lg bg-card px-4">
+                   <AccordionTrigger className="hover:no-underline py-4">
+                     <div className="flex items-center gap-3">
+                       <div className="w-8 h-8 rounded-full bg-game-pipe/10 flex items-center justify-center">
+                         <CheckCircle className="w-4 h-4 text-game-pipe" />
+                       </div>
+                       <span className="text-lg font-semibold">{subject}</span>
+                       <Badge variant="outline" className="ml-2">{tests.length} Completed</Badge>
+                     </div>
+                   </AccordionTrigger>
+                    <AccordionContent className="pb-4 pt-2">
+                      <div className="space-y-4">
+                        {tests.map((test, index) => (
+                          <Card key={`${test.attempt_id}-${index}`} variant="default">
+                            <CardContent className="p-6">
+                              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-3 mb-2">
+                                    <h3 className="text-lg font-bold">{test.title}</h3>
+                                    <Badge 
+                                      variant="outline" 
+                                      className={test.passed 
+                                        ? 'bg-game-pipe/20 text-game-pipe border-game-pipe/30' 
+                                        : 'bg-destructive/20 text-destructive border-destructive/30'
+                                      }
+                                    >
+                                      {test.passed ? 'Passed' : 'Failed'}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                                    <Calendar size={14} />
+                                    Completed: {format(new Date(test.date), 'MMM d, yyyy')}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                  <div className="text-center">
+                                    <div className={`text-3xl font-bold ${test.passed ? 'text-game-pipe' : 'text-destructive'}`}>
+                                      {Math.round(test.score)}%
+                                    </div>
+                                  </div>
+                                  <Link to={`/student/results/${test.attempt_id}`}>
+                                    <Button variant="outline">
+                                      View Details
+                                      <ArrowRight size={16} />
+                                    </Button>
+                                  </Link>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
                       </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-center">
-                          <div className={`text-3xl font-bold ${test.passed ? 'text-game-pipe' : 'text-destructive'}`}>
-                            {Math.round(test.score)}%
-                          </div>
-                        </div>
-                        <Link to={`/student/results/${test.attempt_id}`}>
-                          <Button variant="outline">
-                            View Details
-                            <ArrowRight size={16} />
-                          </Button>
-                        </Link>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
             )}
           </TabsContent>
         </Tabs>

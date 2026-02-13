@@ -35,6 +35,9 @@ import AdminAnalytics from "./pages/admin/AdminAnalytics";
 import AdminAntiCheatLogs from "./pages/admin/AdminAntiCheatLogs";
 import AdminProfile from "./pages/admin/AdminProfile";
 import NotFound from "./pages/NotFound";
+import StudentTestExplanations from "./pages/student/StudentTestExplanations";
+import UpdatePasswordPage from "./pages/auth/UpdatePasswordPage";
+import AdminActivity from "./pages/admin/AdminActivityLog";
 
 const queryClient = new QueryClient();
 
@@ -52,6 +55,7 @@ const App = () => (
             <Route path="/auth/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
             <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/pending-approval" element={<PendingApprovalPage />} />
+            <Route path="/auth/update-password" element={<UpdatePasswordPage />} />
 
             {/* Student Routes */}
             <Route path="/student/dashboard" element={<ProtectedRoute allowedRoles={['student']}><StudentDashboard /></ProtectedRoute>} />
@@ -63,7 +67,7 @@ const App = () => (
             <Route path="/student/leaderboard" element={<ProtectedRoute allowedRoles={['student']}><StudentLeaderboard /></ProtectedRoute>} />
             <Route path="/student/analytics" element={<ProtectedRoute allowedRoles={['student']}><StudentAnalytics /></ProtectedRoute>} />
             <Route path="/student/profile" element={<ProtectedRoute allowedRoles={['student']}><StudentProfile /></ProtectedRoute>} />
-
+            <Route path="/student/results/:id/explanations" element={<ProtectedRoute allowedRoles={['student']}><StudentTestExplanations /></ProtectedRoute>} />
             {/* Mentor Routes - Share admin components */}
             <Route path="/mentor/dashboard" element={<ProtectedRoute allowedRoles={['mentor']}><AdminDashboard /></ProtectedRoute>} />
             <Route path="/mentor/subjects" element={<ProtectedRoute allowedRoles={['mentor']}><AdminSubjects /></ProtectedRoute>} />
@@ -84,7 +88,7 @@ const App = () => (
             <Route path="/admin/analytics" element={<ProtectedRoute allowedRoles={['admin']}><AdminAnalytics /></ProtectedRoute>} />
             <Route path="/admin/anti-cheat-logs" element={<ProtectedRoute allowedRoles={['admin']}><AdminAntiCheatLogs /></ProtectedRoute>} />
             <Route path="/admin/profile" element={<ProtectedRoute allowedRoles={['admin']}><AdminProfile /></ProtectedRoute>} />
-
+            <Route path="/admin/activity" element={<ProtectedRoute allowedRoles={['admin']}><AdminActivity /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

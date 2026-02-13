@@ -43,9 +43,9 @@ export default function LandingPage() {
   ];
 
   const stats = [
-    { value: '10K+', label: 'Students' },
-    { value: '500+', label: 'Tests Created' },
-    { value: '1M+', label: 'Questions Answered' },
+    { value: '100+', label: 'Students' },
+    { value: '100+', label: 'Tests Created' },
+    { value: '2000+', label: 'Questions Answered' },
     { value: '99.9%', label: 'Uptime' },
   ];
 

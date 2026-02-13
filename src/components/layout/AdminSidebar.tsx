@@ -74,12 +74,14 @@ export function AdminSidebar({ role }: AdminSidebarProps) {
       <div className="h-16 flex items-center justify-between px-4 border-b border-sidebar-border">
         {!collapsed && (
           <Link to={`/${role}/dashboard`} className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
-              <span className="text-sidebar-primary-foreground font-pixel text-xs">GI</span>
-            </div>
+            <img 
+              src="/favicon.ico" 
+              alt="Logo" 
+              className="w-10 h-10 rounded-xl shrink-0 object-contain" 
+            />
             <span className="font-game font-bold text-sidebar-foreground">Gamify IAS</span>
           </Link>
-        )}
+        )}  
         <Button 
           variant="adminGhost" 
           size="iconSm"

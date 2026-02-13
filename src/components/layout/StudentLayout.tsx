@@ -34,7 +34,7 @@ import {
 
 const navItems = [
   { icon: Home, label: 'Dashboard', href: '/student/dashboard' },
-  { icon: Gamepad2, label: 'Game World', href: '/student/game' },
+  // { icon: Gamepad2, label: 'Game World', href: '/student/game' },
   { icon: ClipboardList, label: 'My Tests', href: '/student/tests' },
   { icon: Target, label: 'Weak Areas', href: '/student/weak-tests' },
   // { icon: Trophy, label: 'Leaderboard', href: '/student/leaderboard' },
@@ -51,9 +51,11 @@ function StudentSidebarContent() {
       {/* Logo */}
       <div className="p-4 border-b border-sidebar-border">
         <Link to="/student/dashboard" className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-game-gold to-game-star flex items-center justify-center shadow-pixel shrink-0">
-            <span className="text-primary-foreground font-pixel text-xs">G</span>
-          </div>
+          <img 
+            src="/favicon.ico" 
+            alt="Logo" 
+            className="w-10 h-10 rounded-xl shrink-0 object-contain" 
+          />
           <span className="font-game font-bold text-lg text-sidebar-foreground">Gamify IAS</span>
         </Link>
       </div>

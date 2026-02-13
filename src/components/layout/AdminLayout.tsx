@@ -38,6 +38,7 @@ const adminNavItems = [
   { icon: FileQuestion, label: 'Questions', href: '/admin/questions' },
   { icon: ClipboardList, label: 'Tests', href: '/admin/tests' },
   { icon: BarChart3, label: 'Analytics', href: '/admin/analytics' },
+  { icon: BarChart3, label: 'Activity', href: '/admin/activity' },
   { icon: AlertTriangle, label: 'Anti-Cheat Logs', href: '/admin/anti-cheat-logs' },
   { icon: Settings, label: 'Profile', href: '/admin/profile' },
 ];
@@ -64,12 +65,14 @@ function AdminSidebarContent({ role }: AdminSidebarContentProps) {
 
   return (
     <>
-      {/* Logo */}
+{/* Logo */}
       <div className="p-4 border-b border-sidebar-border">
         <Link to={`/${role}/dashboard`} className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-game-gold to-game-star flex items-center justify-center shadow-md shrink-0">
-            <span className="text-primary-foreground font-pixel text-xs">GI</span>
-          </div>
+          <img 
+            src="/favicon.ico" 
+            alt="Logo" 
+            className="w-10 h-10 rounded-xl shrink-0 object-contain shadow-md" 
+          />
           <div>
             <span className="font-game font-bold text-lg text-sidebar-foreground block">Gamify IAS</span>
             <span className="text-xs text-sidebar-foreground/60 capitalize">{role} Panel</span>

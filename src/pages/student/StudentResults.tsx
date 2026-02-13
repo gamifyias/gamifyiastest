@@ -4,8 +4,6 @@ import { StudentLayout } from '@/components/layout/StudentLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
@@ -21,7 +19,8 @@ import {
   AlertTriangle,
   SkipForward,
   Loader2,
-  Download,
+  BookOpen,
+  ArrowRight
 } from 'lucide-react';
 
 interface AttemptData {
@@ -50,6 +49,7 @@ interface AttemptData {
   };
 }
 
+// NOTE: You can remove AnswerData interface if you plan to remove the inline review list later
 interface AnswerData {
   id: string;
   question_id: string;
@@ -78,7 +78,6 @@ export default function StudentResults() {
   const [attempt, setAttempt] = useState<AttemptData | null>(null);
   const [answers, setAnswers] = useState<AnswerData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [certificateNumber, setCertificateNumber] = useState('');
 
   useEffect(() => {
     if (attemptId) {
@@ -106,32 +105,31 @@ export default function StudentResults() {
       if (attemptError) throw attemptError;
       setAttempt(attemptData as AttemptData);
 
-      // Fetch answers with questions if show_answers is true
-      if (attemptData.tests?.show_answers) {
-        const { data: answersData } = await supabase
-          .from('student_answers')
-          .select(`
-            *,
-            questions (
-              question_text,
-              question_type,
-              difficulty,
-              marks,
-              negative_marks,
-              explanation,
-              question_options (
-                id,
-                option_text,
-                is_correct
-              )
+      // Fetch answers
+      const { data: answersData } = await supabase
+        .from('student_answers')
+        .select(`
+          *,
+          questions (
+            question_text,
+            question_type,
+            difficulty,
+            marks,
+            negative_marks,
+            explanation,
+            question_options (
+              id,
+              option_text,
+              is_correct
             )
-          `)
-          .eq('attempt_id', attemptId);
+          )
+        `)
+        .eq('attempt_id', attemptId);
 
-        if (answersData) {
-          setAnswers(answersData as AnswerData[]);
-        }
+      if (answersData) {
+        setAnswers(answersData as AnswerData[]);
       }
+      
     } catch (error) {
       console.error('Error fetching results:', error);
     } finally {
@@ -174,7 +172,7 @@ export default function StudentResults() {
   return (
     <StudentLayout>
       <div className="max-w-4xl mx-auto p-6 space-y-6">
-        {/* Back Button */}
+        {/* Top Navigation */}
         <Link to="/student/tests">
           <Button variant="outline" size="sm">
             <ArrowLeft className="w-4 h-4" />
@@ -291,104 +289,7 @@ export default function StudentResults() {
           </CardContent>
         </Card>
 
-        {/* Answer Review */}
-        {attempt.tests.show_answers && answers.length > 0 && (
-          <Card variant="default">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Target className="w-5 h-5" />
-                Answer Review
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {answers.map((answer, index) => (
-                <div key={answer.id} className="border-b last:border-0 pb-6 last:pb-0">
-                  <div className="flex items-start justify-between gap-4 mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-sm font-medium">
-                        {index + 1}
-                      </span>
-                      {answer.is_correct ? (
-                        <CheckCircle className="w-5 h-5 text-accent" />
-                      ) : (
-                        <XCircle className="w-5 h-5 text-destructive" />
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline">{answer.questions.difficulty}</Badge>
-                      <Badge variant={answer.is_correct ? 'default' : 'destructive'}>
-                        {answer.marks_obtained > 0 ? '+' : ''}{answer.marks_obtained}
-                      </Badge>
-                    </div>
-                  </div>
-                  
-                  <p className="font-medium mb-3">{answer.questions.question_text}</p>
-                  
-                  <div className="space-y-2 ml-10">
-                    {answer.questions.question_options.map((option) => {
-                      const isSelected = answer.selected_options?.includes(option.id);
-                      const isCorrect = option.is_correct;
-                      
-                      return (
-                        <div
-                          key={option.id}
-                          className={`p-3 rounded-lg border ${
-                            isCorrect
-                              ? 'bg-accent/10 border-accent'
-                              : isSelected
-                              ? 'bg-destructive/10 border-destructive'
-                              : 'bg-muted/50'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            {isCorrect && <CheckCircle className="w-4 h-4 text-accent" />}
-                            {isSelected && !isCorrect && <XCircle className="w-4 h-4 text-destructive" />}
-                            <span className={isSelected ? 'font-medium' : ''}>{option.option_text}</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {answer.questions.explanation && (
-                    <div className="mt-3 ml-10 p-3 bg-secondary/10 rounded-lg">
-                      <p className="text-sm font-medium mb-1">Explanation:</p>
-                      <p className="text-sm text-muted-foreground">{answer.questions.explanation}</p>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Test Info */}
-        <Card variant="default">
-          <CardContent className="p-6">
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-muted-foreground">Test</p>
-                <p className="font-medium">{attempt.tests.title}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Subject</p>
-                <p className="font-medium">{attempt.tests.subjects?.name || 'N/A'}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Submitted</p>
-                <p className="font-medium">
-                  {format(new Date(attempt.submitted_at), 'PPp')}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Tab Switches</p>
-                <p className="font-medium">{attempt.tab_switches || 0}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Certificate for Passed Tests */}
+        {/* Certificate Section */}
         {attempt.is_passed && (
           <Card variant="gameHighlight">
             <CardHeader>
@@ -420,17 +321,52 @@ export default function StudentResults() {
           </Card>
         )}
 
-        {/* Actions */}
-        <div className="flex gap-4">
-          <Link to="/student/tests" className="flex-1">
+        {/* Test Info Footer */}
+        <Card variant="default">
+          <CardContent className="p-6">
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-muted-foreground">Test</p>
+                <p className="font-medium">{attempt.tests.title}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Subject</p>
+                <p className="font-medium">{attempt.tests.subjects?.name || 'N/A'}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Submitted</p>
+                <p className="font-medium">
+                  {format(new Date(attempt.submitted_at), 'PPp')}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* MAIN ACTIONS */}
+        <div className="flex flex-col md:flex-row gap-4">
+          <Link to="/student/tests" className="flex-1 order-2 md:order-1">
             <Button variant="outline" className="w-full">
-              <ArrowLeft className="w-4 h-4" />
+              <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Tests
             </Button>
           </Link>
-          <Link to="/student/analytics" className="flex-1">
+
+          {/* NEW BUTTON FOR EXPLANATIONS */}
+          <Link 
+            to={`/student/results/${attemptId}/explanations`} 
+            className="flex-1 order-1 md:order-2"
+          >
+            <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+              <BookOpen className="w-4 h-4 mr-2" />
+              View Solutions & Explanations
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          </Link>
+
+          <Link to="/student/analytics" className="flex-1 order-3">
             <Button variant="game" className="w-full">
-              <Award className="w-4 h-4" />
+              <Award className="w-4 h-4 mr-2" />
               View Analytics
             </Button>
           </Link>
