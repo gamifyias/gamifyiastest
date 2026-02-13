@@ -173,8 +173,9 @@ export default function AdminProfile() {
                <div className="h-12 w-12 rounded-full bg-green-500/10 flex items-center justify-center mb-3">
                   <ShieldCheck className="h-6 w-6 text-green-600" />
                </div>
-               <p className="text-sm font-medium text-foreground">Your account is secure</p>
-               <p className="text-xs text-muted-foreground mt-1">Multi-factor authentication is active via your provider.</p>
+               <p className="text-sm font-medium text-foreground">Your account is secure And Encrypted.</p>
+               <p className="text-xs text-muted-foreground mt-1">Multi-factor authentication is active By Gamify IAS And Hyde.</p>
+               <p className="text-xs text-muted-foreground mt-2">By Hyde Security.</p>
             </CardContent>
           </Card>
         </div>

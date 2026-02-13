@@ -22,6 +22,8 @@ import {
   Shield,
   Maximize,
   Loader2,
+  ShieldCheck,
+  IdCard,
 } from 'lucide-react';
 
 interface Question {
@@ -674,7 +676,7 @@ export default function StudentTestTaking() {
                       />
                     </div>
                   )}
-
+                  
                   {/* Navigation */}
                   <div className="flex items-center justify-between mt-8 pt-6 border-t">
                     <Button
@@ -685,6 +687,7 @@ export default function StudentTestTaking() {
                       <ChevronLeft className="w-4 h-4" />
                       Previous
                     </Button>
+                    
                     <span className="text-sm text-muted-foreground">
                       {currentIndex + 1} / {questions.length}
                     </span>
@@ -767,7 +770,9 @@ export default function StudentTestTaking() {
               </aside>
             )}
           </div>
+          <p className="text-xs text-muted-foreground mt-1 text-center">Encrypted By <span className="font-bold">Hyde Security.</span></p>
         </div>
+        
       )}
     </div>
   );
